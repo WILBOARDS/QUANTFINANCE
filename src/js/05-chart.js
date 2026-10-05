@@ -6,7 +6,7 @@ const ChartView = (() => {
   const C = { up: '#34d1a4', down: '#ff6f61', brass: '#e0b15a', blue: '#6fb1ff', ink2: '#93a8bf', grid: 'rgba(23,49,74,0.55)' };
   const TF_N = { '1M': 22, '3M': 64, '6M': 128, '1Y': 256, '5Y': 1300 };
   let chart, main, vol, ma20, ma50;
-  let cur = null, bars = [], byTime = new Map(), req = 0, range52 = null;
+  let cur = null, bars = [], byTime = new Map(), req = 0, range52 = null, hist = null;
 
   function init() {
     chart = LightweightCharts.createChart(el, {
@@ -30,15 +30,17 @@ const ChartView = (() => {
     });
   }
 
+  /* data yang hanya punya harga penutupan (FRED) selalu digambar sebagai garis: tidak mengarang high/low */
+  const effType = () => (hist && hist.closeOnly && State.type === 'candle' ? 'line' : State.type);
   function buildSeries() {
     for (const s of [vol, main, ma20, ma50]) if (s) chart.removeSeries(s);
     const dp = cur.dp;
     const pf = { type: 'price', precision: dp, minMove: Math.pow(10, -dp) };
     vol = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false, priceLineVisible: false });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
-    if (State.type === 'candle') {
+    if (effType() === 'candle') {
       main = chart.addCandlestickSeries({ upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down, priceFormat: pf });
-    } else if (State.type === 'area') {
+    } else if (effType() === 'area') {
       main = chart.addAreaSeries({ lineColor: C.brass, topColor: 'rgba(224,177,90,0.28)', bottomColor: 'rgba(224,177,90,0)', lineWidth: 2, priceFormat: pf });
     } else {
       main = chart.addLineSeries({ color: C.brass, lineWidth: 2, priceFormat: pf });
@@ -46,7 +48,7 @@ const ChartView = (() => {
     const maOpt = color => ({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: State.ma, priceFormat: pf });
     ma20 = chart.addLineSeries(maOpt(C.brass));
     ma50 = chart.addLineSeries(maOpt(C.blue));
-    if (State.type === 'line' || State.type === 'area') { ma20.applyOptions({ color: C.blue }); ma50.applyOptions({ color: '#b48cff' }); }
+    if (effType() === 'line' || effType() === 'area') { ma20.applyOptions({ color: C.blue }); ma50.applyOptions({ color: '#b48cff' }); }
   }
 
   const toCandle = b => ({ time: b.time, open: b.open, high: b.high, low: b.low, close: b.close });
@@ -63,7 +65,7 @@ const ChartView = (() => {
   }
 
   function setData() {
-    main.setData(State.type === 'candle' ? bars.map(toCandle) : bars.map(toPoint));
+    main.setData(effType() === 'candle' ? bars.map(toCandle) : bars.map(toPoint));
     const hasVol = cur.type !== 'index' && bars.some(b => b.volume > 0);
     vol.setData(hasVol ? bars.map(toVol) : []);
     ma20.setData(sma(20)); ma50.setData(sma(50));
@@ -83,21 +85,42 @@ const ChartView = (() => {
       `<span class="${cls}">${fmtPct(ch)}</span>` + (b.volume > 0 && cur.type !== 'index' ? `<span>Vol <b>${fmtCompact(b.volume)}</b></span>` : '');
   }
 
+  /* riwayat: sumber nyata dulu (MarketData). Simulasi HANYA di mode demo dan hanya untuk aset
+     yang memang tidak punya sumber nyata, supaya harga asli tidak dicampur riwayat palsu. */
   async function fetchBars(inst, tf) {
-    if (inst.live && inst.bn) {
-      try { const b = await Live.klines(inst, tf); if (b && b.length) return b; } catch (e) { /* pakai simulasi */ }
+    const h = await MarketData.history(inst, tf);
+    if (h && h.bars && h.bars.length) { hist = h; return h.bars; }
+    if (State.demo && !inst.real) {
+      hist = { quality: 'sim', source: 'Generator simulasi (mode demo)' };
+      if (tf === '1D') return ensureIntra(inst).map(b => ({ ...b }));
+      return ensureDaily(inst).slice(-TF_N[tf]).map(b => ({ ...b }));
     }
-    if (tf === '1D') return ensureIntra(inst).map(b => ({ ...b }));
-    return ensureDaily(inst).slice(-TF_N[tf]).map(b => ({ ...b }));
+    hist = h || { quality: 'unavailable', error: 'Tidak ada sumber riwayat harga untuk aset ini.' };
+    return [];
   }
 
   async function compute52(inst) {
-    let src;
-    if (inst.live && inst.bn) { try { src = await Live.klines(inst, '1Y'); } catch (e) { src = null; } }
-    if (!src || !src.length) src = ensureDaily(inst).slice(-260);
+    const h = await MarketData.history(inst, '1Y');
+    let src = h && h.bars && h.bars.length ? h.bars : null;
+    if (!src && State.demo && !inst.real) src = ensureDaily(inst).slice(-260);
+    if (!src || !src.length) return null;
     let hi = -Infinity, lo = Infinity;
     for (const b of src) { if (b.high > hi) hi = b.high; if (b.low < lo) lo = b.low; }
     return [lo, hi];
+  }
+  function noteHist() {
+    const na = $('#chartNa');
+    const q = $('#cHist');
+    if (bars.length) {
+      na.hidden = true;
+      q.innerHTML = hist ? qBadge(hist.quality || 'unavailable', hist.source) + `<span class="meta">${esc(hist.source || '')}</span>` : '';
+    } else {
+      na.hidden = false;
+      const why = hist && hist.error ? hist.error : 'Tidak ada sumber riwayat harga.';
+      na.innerHTML = `<div><p><strong>Grafik ${esc(cur.sym)} tidak tersedia.</strong></p><p>${esc(why)}</p>` +
+        `<p class="hint">${cur.type === 'crypto' ? 'Kripto memakai Binance/CoinGecko langsung dari browser; cek koneksi atau halaman Sumber data.' : 'Riwayat saham/indeks butuh server lokal: FRED (S&amp;P 500, Nikkei, tanpa kunci) atau Yahoo tidak resmi (ENABLE_UNOFFICIAL_YAHOO=1). Mode demo bisa dinyalakan di Pengaturan untuk angka simulasi berlabel.'}</p></div>`;
+      q.innerHTML = qBadge('unavailable');
+    }
   }
 
   async function load() {
@@ -108,6 +131,7 @@ const ChartView = (() => {
     bars = b;
     buildSeries();
     setData();
+    noteHist();
   }
 
   function head() {
@@ -118,6 +142,7 @@ const ChartView = (() => {
     const pill = $('#cChg');
     pill.textContent = fmtPct(p);
     pill.className = 'pill ' + sign(p);
+    $('#cQual').innerHTML = qBadge(i.quality || 'unavailable', i.srcName ? 'Harga dari ' + i.srcName : '') + (i.asOf ? `<span class="meta" title="Waktu data harga">${esc(fmtAge(i.asOf))}</span>` : '');
     const st = i.type === 'crypto' ? { open: true, label: 'Buka 24 jam', detail: '' } : statusOf(i.mkt);
     const chip = $('#cStatus');
     chip.textContent = st.label;
@@ -132,7 +157,8 @@ const ChartView = (() => {
   }
 
   function applyTick(inst) {
-    if (!bars.length || !main) return;
+    if (!bars.length || !main || !Number.isFinite(inst.price)) return;
+    if (hist && hist.quality === 'eod' && State.tf !== '1D') return;   // jangan menimpa bar harian resmi dengan tick
     const price = inst.price;
     let bar = bars[bars.length - 1];
     if (State.tf === '1D') {
@@ -142,7 +168,7 @@ const ChartView = (() => {
     bar.close = price;
     if (price > bar.high) bar.high = price;
     if (price < bar.low) bar.low = price;
-    main.update(State.type === 'candle' ? toCandle(bar) : toPoint(bar));
+    main.update(effType() === 'candle' ? toCandle(bar) : toPoint(bar));
     if (vol && bar.volume > 0) vol.update(toVol(bar));
     for (const [n, s] of [[20, ma20], [50, ma50]]) {
       if (bars.length >= n) {
@@ -168,78 +194,5 @@ const ChartView = (() => {
       head();
     },
     get current() { return cur; },
-  };
-})();
-
-/* =====================================================================
-   DATA LIVE: kripto dari API publik Binance (tanpa kunci API)
-   Kalau gagal (offline / diblokir), otomatis kembali ke simulasi.
-   ===================================================================== */
-const Live = (() => {
-  const API = 'https://api.binance.com/api/v3';
-  const KL = { '1D': ['5m', 288], '1M': ['4h', 180], '3M': ['1d', 90], '6M': ['1d', 180], '1Y': ['1d', 365], '5Y': ['1w', 260] };
-  const byBn = {};
-  INSTS.filter(i => i.bn).forEach(i => { byBn[i.bn] = i; });
-  const cache = new Map();
-  let ok = null, timer = null, warned = false;
-
-  async function getJson(url, ms = 7000) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), ms);
-    try {
-      const res = await fetch(url, { signal: ctl.signal, cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.json();
-    } finally { clearTimeout(t); }
-  }
-  function setMode(live) {
-    const chip = $('#modeChip');
-    chip.dataset.state = live ? 'live' : 'sim';
-    $('#modeText').textContent = live ? 'Kripto live, saham simulasi' : 'Data simulasi';
-  }
-  async function poll() {
-    const syms = Object.keys(byBn);
-    try {
-      const arr = await getJson(`${API}/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(syms))}`);
-      const changed = [];
-      for (const t of arr) {
-        const i = byBn[t.symbol]; if (!i) continue;
-        const price = +t.lastPrice, p = +t.priceChangePercent / 100;
-        if (!Number.isFinite(price) || price <= 0) continue;
-        if (!i.live) { i.live = true; i.spark = []; }
-        i.price = price; i.prev = price / (1 + p); i.open = +t.openPrice; i.high = +t.highPrice; i.low = +t.lowPrice; i.volume = +t.volume;
-        i.dp = price < 10 ? 4 : price < 1000 ? 2 : 2;
-        i.spark.push(price); if (i.spark.length > 40) i.spark.shift();
-        changed.push(i);
-      }
-      if (changed.length) {
-        if (ok !== true) { ok = true; setMode(true); if (!warned) toast('Harga kripto sekarang live dari Binance.'); warned = true; ChartView.reload(); }
-        bus.emit('tick', changed);
-      }
-    } catch (e) {
-      if (ok !== false) {
-        ok = false; setMode(false);
-        Object.values(byBn).forEach(i => { i.live = false; });
-        toast('Harga kripto live tidak bisa diakses dari jaringanmu, jadi kripto memakai simulasi.');
-      }
-    }
-  }
-  return {
-    start() { if (timer) return; poll(); timer = setInterval(poll, 4000); },
-    stop() {
-      clearInterval(timer); timer = null; ok = null; setMode(false);
-      Object.values(byBn).forEach(i => { i.live = false; });
-      ChartView.reload();
-    },
-    async klines(inst, tf) {
-      const [iv, lim] = KL[tf];
-      const key = inst.bn + iv + lim;
-      const c = cache.get(key);
-      if (c && Date.now() - c.t < 60000) return c.v.map(b => ({ ...b }));
-      const raw = await getJson(`${API}/klines?symbol=${inst.bn}&interval=${iv}&limit=${lim}`);
-      const v = raw.map(k => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
-      cache.set(key, { t: Date.now(), v });
-      return v.map(b => ({ ...b }));
-    },
   };
 })();

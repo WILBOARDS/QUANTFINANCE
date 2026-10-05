@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "start": "node server/server.mjs",
     "dev": "node build.mjs && node server/server.mjs",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.mjs\"",
     "e2e": "node qa/e2e.mjs"
   },
   "devDependencies": {

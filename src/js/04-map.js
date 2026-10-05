@@ -92,6 +92,7 @@ const MapView = (() => {
   }
 
   function heat(p) {
+    if (!Number.isFinite(p)) return 'rgba(0,0,0,0)';
     const t = clamp(p / 0.02, -1, 1);
     const a = 0.16 + 0.5 * Math.pow(Math.abs(t), 0.8);
     return t >= 0 ? `rgba(52,209,164,${a.toFixed(3)})` : `rgba(255,111,97,${a.toFixed(3)})`;
@@ -195,7 +196,8 @@ const MapView = (() => {
 
     for (const m of mlist) {                          // warna negara menurut naik-turun indeks
       const co = m.country && byName.get(m.country);
-      if (co) { c.fillStyle = heat(pct(BY[m.idx])); c.fill(co.path, 'evenodd'); }
+      const pv = pct(BY[m.idx]);
+      if (co && Number.isFinite(pv)) { c.fillStyle = heat(pv); c.fill(co.path, 'evenodd'); }
     }
 
     const hi = [];
@@ -234,7 +236,7 @@ const MapView = (() => {
         c.font = F1;
         c.fillStyle = st.open ? '#e8eef6' : '#93a8bf'; c.fillText(code, bx + 7, by + bh / 2 + 0.5);
         c.font = F2;
-        c.fillStyle = p >= 0 ? '#34d1a4' : '#ff6f61'; c.fillText(ptxt, bx + 11 + w1, by + bh / 2 + 0.5);
+        c.fillStyle = !Number.isFinite(p) ? '#7188a3' : p >= 0 ? '#34d1a4' : '#ff6f61'; c.fillText(Number.isFinite(p) ? ptxt : 'n/a', bx + 11 + w1, by + bh / 2 + 0.5);
         labelRects.push({ id: m.id, x: bx, y: by, w: bw, h: bh });
       }
     }
@@ -271,7 +273,8 @@ const MapView = (() => {
     tip.innerHTML =
       `<div class="t-city">${esc(m.city)}</div><div class="t-ex">${esc(m.ex)}, ${esc(inst.name)}</div>` +
       `<div class="t-row"><span class="t-px">${fmt(inst.price, 2)}</span><span class="pill ${sign(p)}">${fmtPct(p)}</span></div>` +
-      `<div class="t-st ${st.open ? 'open' : ''}"><i></i>${st.label}${st.detail ? ', ' + st.detail : ''}</div>`;
+      `<div class="t-st ${st.open ? 'open' : ''}"><i></i>${st.label}${st.detail ? ', ' + st.detail : ''}</div>` +
+      `<div class="t-st">${qBadge(inst.quality || 'unavailable')}${inst.srcName ? ' ' + esc(inst.srcName) : ''}</div>`;
     tip.hidden = false;
     if (px !== undefined) {
       const tw = tip.offsetWidth, th = tip.offsetHeight;

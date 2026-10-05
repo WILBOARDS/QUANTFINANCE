@@ -46,7 +46,10 @@ const App = (() => {
   }
   function updateTag(i) {
     const r = rowMap.get(i.sym);
-    const html = i.live ? '<span class="tag-live">live</span>' : (i.type !== 'crypto' && !isOpen(i)) ? '<span class="tag-closed">tutup</span>' : '';
+    const q = i.quality;
+    const html = q === 'live' ? '<span class="tag-live">live</span>' : q === 'sim' ? '<span class="tag-sim" title="Harga simulasi (mode demo)">sim</span>' : q === 'unavailable' ? '<span class="tag-na" title="Tidak ada sumber harga">n/a</span>'
+      : (q === 'eod' || q === 'unofficial' || q === 'delayed' || q === 'stale') ? `<span class="tag-del" title="${esc((QUALITY[q] || [q])[0] + (i.srcName ? ': ' + i.srcName : ''))}">${q === 'eod' ? 'harian' : q === 'stale' ? 'basi' : 'tunda'}</span>`
+      : (i.type !== 'crypto' && !isOpen(i)) ? '<span class="tag-closed">tutup</span>' : '';
     if (r.tag.innerHTML !== html) r.tag.innerHTML = html;
   }
   function updateRow(i, flash) {
@@ -69,8 +72,9 @@ const App = (() => {
     let list = STOCKS.filter(i =>
       (State.region === 'ALL' || i.region === State.region) &&
       (!q || i.sym.toLowerCase().includes(q) || i.name.toLowerCase().includes(q)));
-    if (State.tab === 'up') list = [...list].sort((a, b) => pct(b) - pct(a));
-    else if (State.tab === 'down') list = [...list].sort((a, b) => pct(a) - pct(b));
+    const pv = (i, d) => (Number.isFinite(pct(i)) ? pct(i) : d);
+    if (State.tab === 'up') list = [...list].sort((a, b) => pv(b, -Infinity) - pv(a, -Infinity));
+    else if (State.tab === 'down') list = [...list].sort((a, b) => pv(a, Infinity) - pv(b, Infinity));
     return list;
   }
   function applyView() {
@@ -98,10 +102,11 @@ const App = (() => {
   }
 
   /* ---------- kartu kesehatan keuangan ---------- */
-  function renderHealth(inst) {
-    const el = $('#healthBody'), flag = $('#hFlag');
+  /* panel v1: ringkasan bursa (indeks) dan skor kesehatan sintetis (hanya mode demo) */
+  function legacyHealth(inst, el) {
+    const flag = $('#hFlag');
     if (inst.type === 'index') {
-      flag.hidden = false;
+      flag.hidden = !State.demo || inst.real;
       const m = MARKETS[inst.mkt], st = statusOf(inst.mkt);
       const hh = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
       const local = new Intl.DateTimeFormat('id-ID', { timeZone: m.tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
@@ -119,7 +124,7 @@ const App = (() => {
         <div><h3 class="sub">Saham dari bursa ini di daftar</h3>
           ${members.length ? `<div class="mini-list">${members.map(x => `<button type="button" data-pick="${x.sym}"><span>${esc(x.sym)}<small>${esc(x.name)}</small></span><span class="num ${sign(pct(x))}">${fmtPct(pct(x))}</span></button>`).join('')}</div>`
           : '<p class="sim-note">Belum ada saham dari bursa ini di daftar kanan.</p>'}</div>
-        <p class="sim-note">Pilih saham untuk melihat skor kesehatan keuangannya. Level indeks di sini disimulasikan.</p>`;
+        <p class="sim-note">${inst.real ? 'Level indeks dari ' + esc(inst.srcName) + '.' : State.demo ? 'Level indeks di sini disimulasikan (mode demo).' : 'Level indeks tidak tersedia tanpa server (FRED/Yahoo).'}</p>`;
       return;
     }
     if (inst.type !== 'stock') {
@@ -163,6 +168,8 @@ const App = (() => {
       <p class="sim-note">Angka laporan keuangan di sini sintetis, hanya rumusnya yang nyata. Jangan dipakai untuk menilai perusahaan sungguhan.</p>`;
   }
 
+  function renderHealth(inst) { AssetPanel.render(inst, $('#healthBody'), $('#hFlag')); }
+
   /* ---------- pilih instrumen ---------- */
   function select(sym, go) {
     const inst = BY[sym]; if (!inst) return;
@@ -175,6 +182,8 @@ const App = (() => {
   }
   bus.on('pickSym', ({ sym, go }) => select(sym, go));
   $('#healthBody').addEventListener('click', e => { const b = e.target.closest('[data-pick]'); if (b) select(b.dataset.pick); });
+  bus.on('openCountry', iso3 => { CountryPage.open(iso3, 'overview'); showPage('country'); });
+  bus.on('intelCountry', iso3 => { showPage('intel'); IntelPage.focusCountry(iso3); });
   bus.on('pickMarket', id => {
     const m = MARKETS[id];
     State.region = m.region || 'ALL';
@@ -184,12 +193,32 @@ const App = (() => {
   });
 
   /* ---------- halaman ---------- */
+  const PAGES = { intel: IntelPage, country: CountryPage, news: NewsPage, ships: ShipsPage, macro: MacroPage, sources: SourcesPage };
+  let curPage = 'market';
   function showPage(p) {
+    if (!$('#page-' + p)) p = 'market';
+    if (curPage !== p && PAGES[curPage] && PAGES[curPage].hide) PAGES[curPage].hide();
+    curPage = p;
     $$('.page').forEach(el => { el.hidden = el.id !== 'page-' + p; });
-    $$('.nav button').forEach(b => { if (b.dataset.page === p) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-    if (p === 'market') requestAnimationFrame(() => MapView.resize());
+    $$('.nav button').forEach(b => { if (b.dataset.page === p) { b.setAttribute('aria-current', 'page'); b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else b.removeAttribute('aria-current'); });
+    if (p === 'market') requestAnimationFrame(() => { MapView.resize(); if (marketGlobe) marketGlobe.resize(); });
     if (p === 'cash') Cash.render();
+    if (PAGES[p]) PAGES[p].show();
+    Store.set('page', p);
+    if (location.hash !== '#' + p) history.replaceState(null, '', '#' + p);
     window.scrollTo(0, 0);
+  }
+  let marketGlobe = null;
+  function ensureMarketGlobe() {
+    if (marketGlobe) return marketGlobe;
+    marketGlobe = createGlobe($('#marketGlobe'), {
+      zoom: 1, autoRotate: true, visible: { choropleth: false, news: false, hazards: false, ships: false, chokepoints: false, boxes: false },
+      onPick: h => { if (h.type === 'market') bus.emit('pickMarket', h.item.id); else if (h.type === 'country') bus.emit('openCountry', h.iso3); },
+      label: 'Globe pasar dunia: bursa dan perubahan indeks hari ini',
+    });
+    marketGlobe.set('markets', marketPoints());
+    bus.on('tick', () => { if (!$('#marketGlobe').hidden) marketGlobe.set('markets', marketPoints()); });
+    return marketGlobe;
   }
 
   /* ---------- kontrol ---------- */
@@ -211,11 +240,14 @@ const App = (() => {
 
     $('.map-card .seg').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
-      const hours = b.dataset.view === 'hours';
+      const v = b.dataset.view;
       $$('.map-card .seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-      $('#mapBody').hidden = hours; $('#hoursBody').hidden = !hours;
-      $('.legend').style.visibility = hours ? 'hidden' : 'visible';
-      if (hours) HoursView.render(); else requestAnimationFrame(() => MapView.resize());
+      $('#mapBody').hidden = v !== 'map'; $('#hoursBody').hidden = v !== 'hours'; $('#marketGlobe').hidden = v !== 'globe';
+      $('.legend').style.visibility = v === 'hours' ? 'hidden' : 'visible';
+      Store.set('mapView', v);
+      if (v === 'hours') HoursView.render();
+      else if (v === 'globe') requestAnimationFrame(() => ensureMarketGlobe().resize());
+      else requestAnimationFrame(() => MapView.resize());
     });
 
     $('#tfSeg').addEventListener('click', e => {
@@ -245,10 +277,22 @@ const App = (() => {
       State.liveCrypto ? Live.start() : Live.stop();
     });
     $('#setForce').addEventListener('change', e => { State.forceOpen = e.target.checked; Store.set('force', State.forceOpen); });
+    $('#setDemo').checked = State.demo;
+    $('#setDemo').addEventListener('change', e => { Store.set('demo', e.target.checked); toast(e.target.checked ? 'Mode demo dinyalakan: memuat ulang.' : 'Mode demo dimatikan: memuat ulang.'); setTimeout(() => location.reload(), 600); });
+    $('#setServer').value = Store.get('serverBase', 'http://localhost:8787');
+    $('#setServerTest').addEventListener('click', async () => {
+      const v = $('#setServer').value.trim().replace(/\/+$/, '');
+      if (v && !/^https?:\/\/[\w.\-]+(:\d+)?$/.test(v)) { $('#setServerOut').textContent = 'Format alamat tidak valid. Contoh: http://localhost:8787'; return; }
+      Store.set('serverBase', v || 'http://localhost:8787');
+      $('#setServerOut').textContent = 'Mengetes…';
+      const s = await Net.detect();
+      $('#setServerOut').textContent = s ? 'Tersambung ke ' + s.base + '. Muat ulang halaman untuk memakai semua sumber server.' : 'Server tidak ditemukan di alamat itu. Pastikan "npm start" sedang berjalan.';
+    });
+    $('#srvChip').addEventListener('click', () => showPage('sources'));
     dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
     document.addEventListener('keydown', e => {
-      if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
+      if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); if (curPage === 'market') $('#q').focus(); else Palette.open(); }
     });
   }
 
@@ -265,15 +309,47 @@ const App = (() => {
     $('#clock').textContent = `${o.weekday} ${o.day} ${o.month}  ${o.hour}:${o.minute}:${o.second} ${o.timeZoneName}`;
   }
 
+  function demoBanner() {
+    const b = $('#demoBanner');
+    if (State.demo) {
+      b.hidden = false;
+      b.innerHTML = `<strong>Mode demo aktif.</strong><span>Saham dan indeks tanpa sumber nyata memakai harga SIMULASI berlabel "sim". Data nyata tetap dipakai bila tersedia.</span><button type="button" class="mini-btn" id="demoOff">Matikan mode demo</button>`;
+      $('#demoOff').addEventListener('click', () => { Store.set('demo', false); location.reload(); });
+    } else b.hidden = true;
+  }
+  function serverChip(s) {
+    const chip = $('#srvChip');
+    chip.dataset.state = s ? 'on' : 'off';
+    $('#srvText').textContent = s ? 'Server tersambung' : 'Tanpa server';
+    chip.title = s ? 'Server lokal ' + s.base + ' · klik untuk status sumber data' : 'Server lokal tidak terdeteksi: sumber berkunci (FRED, kapal global, saham) tidak aktif. Klik untuk petunjuk.';
+  }
+
   function init() {
     ChartView.init();
     buildRows(); buildChips(); buildTape(); wire(); syncControls();
     applyView();
     Cash.init();
+    demoBanner();
     select(State.sel);
     clock(); setInterval(clock, 1000);
+    MarketData.updateMode();
+    bus.on('server', serverChip);
+    Net.ready().then(async s => {
+      if (s) { await MarketData.startServerSources(); ChartView.reload(); renderHealth(BY[State.sel]); }
+    });
+    const mv = Store.get('mapView', 'map');
+    if (mv !== 'map') { const b = $(`.map-card .seg [data-view="${mv}"]`); if (b) b.click(); }
+    const start = (location.hash || '').slice(1) || 'market';
+    if (start !== 'market') showPage(start);
+    window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (p && p !== curPage) showPage(p); });
 
+    const lastQ = Object.fromEntries(INSTS.map(i => [i.sym, i.quality]));
     bus.on('tick', changed => {
+      for (const i of changed) {
+        /* aset terpilih baru dapat harga nyata pertama: segarkan panel intelijen & grafik */
+        if (i.sym === State.sel && lastQ[i.sym] !== i.quality) { renderHealth(i); ChartView.reload(); }
+        lastQ[i.sym] = i.quality;
+      }
       for (const i of changed) if (rowMap.has(i.sym)) updateRow(i, true);
       updateTape(changed);
       updateBreadth();
@@ -284,7 +360,7 @@ const App = (() => {
     setInterval(() => STOCKS.forEach(updateTag), 15000);
     if (State.liveCrypto) Live.start();
   }
-  return { init, showPage, select };
+  return { init, showPage, select, legacyHealth };
 })();
 
 App.init();

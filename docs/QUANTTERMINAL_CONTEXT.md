@@ -1,6 +1,6 @@
 # QuantTerminal: konteks proyek dan rencana
 
-Terakhir diperbarui: 5 Oktober 2026
+Terakhir diperbarui: 5 Oktober 2026 (setelah v2)
 Tujuan file ini: supaya sesi AI berikutnya langsung punya konteks lengkap tanpa bertanya ulang dari nol.
 Pasangan file ini: `QUANTTERMINAL_PROMPT.md` (prompt siap pakai), `quant-terminal.html` (v1 jadi), `quantterminal-source.zip` (kode sumber v1).
 
@@ -35,57 +35,46 @@ Peta dunia seperti Bloomberg yang menampilkan **pergerakan semua negara**: polit
 
 ---
 
-## 3. Status saat ini: v1 (selesai dan teruji sebagian)
+## 3. Status saat ini: v2 (5 Oktober 2026)
 
-**Bentuk:** satu file HTML mandiri (±490 KB), tanpa server, tanpa Python. Font, library grafik, dan data peta sudah tertanam. Dibuka dengan double-click atau Live Server.
+**Bentuk:** tetap satu file HTML (`dist/quant-terminal.html`, ±1,4 MB, bisa double-click) **ditambah** server Node opsional tanpa library (`npm start`) untuk sumber yang butuh kunci atau menolak akses langsung dari browser. Build sekarang pakai Node (`build.mjs`), **tidak perlu Python lagi**.
 
-### Isi v1
+### Yang ditambahkan di v2
 | Bagian | Keterangan |
 |---|---|
-| Peta dunia | Canvas buatan sendiri, proyeksi Natural Earth (rumusnya sudah dicocokkan dengan d3-geo, selisih 2e-16). Negara diwarnai menurut perubahan indeks hari ini. 17 bursa dengan titik dan label. Titik berdenyut kalau bursa buka. Bayangan malam dari posisi matahari. Hover memunculkan tooltip. Klik memilih indeks dan memfilter daftar kanan. |
-| Jam bursa | Sumbu 24 jam dalam zona waktu pengguna, sesi tiap bursa, garis "sekarang". Memakai `Intl`, hari libur bursa tidak diperhitungkan. |
-| Daftar kanan | 30 saham dan kripto, mini-grafik, kedip hijau atau merah, filter wilayah, pencarian (tombol `/`), tab Daftar, Naik, Turun, bar breadth. |
-| Grafik | TradingView Lightweight Charts v4.2.3: lilin, area, garis, rentang 1D sampai 5Y, MA 20 dan 50, volume, legenda OHLC. |
-| Kesehatan keuangan | Port dari versi Python: Piotroski F-score, Altman Z'', label Sehat, Waspada, Buruk. Bank ditangani terpisah (Altman tidak berlaku). Klik indeks menampilkan ringkasan bursa. |
-| Kas dan alokasi | Port dari `cash.py`: arus kas bulanan (bisa diedit), surplus setelah cadangan darurat, alokasi menurut profil risiko, proyeksi 3 skenario, kandidat screening dari daftar saham. Tersimpan di `localStorage`. |
-| Lainnya | Pita harga berjalan, halaman Metodologi, dialog Pengaturan, responsif sampai 390 px, mendukung `prefers-reduced-motion`. |
+| Lapisan data | Registri penyedia (status, latensi, permintaan, cache, error, cadangan). Setiap hasil membawa sumber, waktu, kualitas (`live, delayed, eod, historical, projection, calculated, proxy, inference, sim, stale, unofficial, unavailable`). Data lama dipakai hanya dengan label "Basi". Klik angka = asal-usul (lineage). |
+| Server lokal | `server/server.mjs`: proxy + cache memori/disk + rate limit per penyedia (GDELT 1/6 dtk, Finnhub ember token) + CORS allowlist + CSP + validasi input + kunci di `.env`. |
+| Globe 3D | d3-geo ortografis di canvas (tanpa WebGL). Seret, zoom sampai level selat (garis pantai 1:50m saat dekat), malam dari posisi matahari, lapisan ekonomi/pasar/berita/bencana/kapal/chokepoint. Juga tersedia di halaman Pasar (tombol "Globe 3D"). |
+| Kapal | AISStream (global, kunci gratis, lewat server) + Digitraffic (Baltik, tanpa kunci). Posisi asli + jejak asli; animasi hanya di antara dua posisi yang dilaporkan. Transit 12+ chokepoint dari IMF PortWatch. Tanpa data: "Data AIS live tidak tersedia". |
+| Negara | Semua ±195 negara: IMF WEO (pertumbuhan, inflasi, pengangguran, utang, fiskal, transaksi berjalan, PDB) dengan fallback World Bank; WDI (cadangan, perdagangan, energi, struktur ekonomi), WGI (stabilitas politik), kurs, suku bunga BIS, obligasi 10 tahun OECD/FRED. Skor negara eksperimental yang transparan. Perbandingan sampai 4 negara. |
+| Berita | Terminal GDELT (12 kategori), tema, sentimen leksikon, skor dampak 0–100 dengan komponen, judul spekulatif, rantai dampak (inferensi). Per negara: isu utama, spekulasi media, tren nada 30 hari, media lokal. |
+| Makro | FRED: kurva yield + durasi/konveksitas, CPI/PPI/NFP/dll, komoditas, korelasi lintas aset (1M–5Y), rezim risk on/off dengan bukti, analog historis sejak 1971; BIS bank sentral; uji tekanan portofolio (asumsi tertulis). |
+| Aset | "Kenapa bergerak?" (bukti harga, volume, pasar, berita, rezim), proksi smart money, fundamental/insider/earnings Finnhub (saham AS), order book Binance (kripto). |
+| Lainnya | Palet perintah Ctrl+K, profil tokoh publik (Wikipedia), pusat Sumber data + kesehatan data, ekspor CSV/JSON, mode demo eksplisit. |
 
-### Yang TERVERIFIKASI (dites di Chromium headless)
-- Halaman termuat tanpa error JavaScript; muat 0,3 detik; menggambar peta 1 ms.
-- Skenario QA A sampai K lolos: hover, klik negara dengan mouse asli, ganti rentang dan jenis grafik, jam bursa, halaman kas, metodologi, pengaturan, tampilan HP 390 px (tanpa overflow horizontal), tablet 1024 px, laptop 1366x768.
-- Rumus skor (versi Python) cocok dengan hitungan tangan.
+### Keputusan penting di v2
+- **Mode demo bawaan MATI.** Tanpa sumber nyata, saham/indeks tampil "n/a". Ini sesuai aturan "jangan memalsukan data". Simulasi v1 masih ada (Pengaturan → Mode demo), selalu berlabel "sim".
+- **Skor kesehatan v1 (Piotroski/Altman sintetis) hanya tampil di mode demo**, begitu juga screening kandidat di halaman Kas.
+- **Server Node, bukan Cloudflare Worker (dulu direncanakan).** Alasan: pemilik bisa menjalankan di laptop dengan satu perintah, tanpa akun cloud. Kode proxy sengaja tanpa library supaya mudah dipindah ke Worker nanti.
+- **Yahoo tidak resmi tetap MATI bawaan** (`ENABLE_UNOFFICIAL_YAHOO=0`), sesuai catatan v1 bahwa pemilik harus memutuskan sendiri.
+
+### Yang TERVERIFIKASI (di sandbox, 5 Oktober 2026)
+- `npm test`: 25 unit test lolos (parser semua API terhadap fixture berformat asli + kalkulasi analitik yang dihitung tangan).
+- `npm run e2e`: 18 skenario Chromium lolos tanpa error JavaScript: tanpa server, offline total (semua panel menulis "tidak tersedia"), dan dengan server; HP 390 px tanpa scroll horizontal, laptop 1366×768, tablet 1024.
+- Server: validasi input (400), rute tidak ada (404), kunci kosong (503 dengan pesan jelas), error sumber diteruskan jujur (contoh: "Host not in allowlist").
+- Performa (Chromium headless tanpa GPU): halaman termuat ±0,35 detik; globe ±16 ms per gambar (median), ±25 ms saat zoom dekat. Animasi dibatasi 30 fps.
 
 ### Yang BELUM terverifikasi (jangan diklaim jalan)
-- **Data live kripto dari Binance.** Jaringan sandbox memblokirnya; kode jatuh kembali ke simulasi dan menampilkan toast. Belum pernah dilihat jalan dengan data asli (CORS, format, batas laju belum teruji).
-- Tampilan di Safari dan Firefox; layar sentuh sungguhan; pembaca layar.
-- Perilaku saat mengganti zona waktu perangkat.
+- **Tidak ada satu pun API sungguhan yang bisa diakses dari sandbox** (jaringan memblokir semua host data). Semua tes memakai sumber palsu berformat asli (`qa/fake-upstream.mjs`, judul berlabel "[UJI]"). Format diambil dari dokumentasi dan pengetahuan umum, **belum dicocokkan dengan respons asli hari ini**.
+- CORS langsung dari browser untuk World Bank, IMF, GDELT, Digitraffic, PortWatch, CoinGecko: belum dites. Kalau ditolak, jalankan server.
+- Kode BIS (`WS_CBPOL`, format CSV), indikator WGI `GOV_WGI_PV.EST`, permintaan multi-indikator World Bank (`source=2`), GDELT GEO 2.0, dan seri OECD `IRLTLT01xxM156N` per negara: format/ketersediaan belum dicek langsung.
+- AISStream: kebijakan "tidak boleh dari browser" dari dokumentasi (via pencarian web); koneksi server dengan kunci asli belum dites. Cakupan di Hormuz/Laut Merah bergantung stasiun penerima sukarela, bisa sepi.
+- Safari/Firefox, layar sentuh asli, pembaca layar.
 
-### PENTING: semua data saham, indeks, dan fundamental di v1 adalah SIMULASI
-Kode saham asli (BBCA dan lainnya) hanya nama. Harga dibuat generator acak berbenih. Laporan keuangan juga sintetis, jadi label Sehat atau Buruk di v1 **tidak berarti apa-apa tentang perusahaan sungguhan**. UI sudah memberi label "Data simulasi", jangan dihapus sebelum data nyata terpasang.
-
-### Peta kode v1 (di `quantterminal-source.zip`)
-```
-src/template.html     kerangka halaman
-src/style.css         token desain + komponen (@layer reset, tokens, base, layout, components, pages)
-src/js/01-core.js     util, RNG berbenih, bus event, daftar bursa/indeks/saham, State
-src/js/02-sim.js      jam bursa, riwayat sintetis, tick simulasi
-src/js/03-health.js   Piotroski, Altman Z'', label (fundamental sintetis)
-src/js/04-map.js      peta canvas + jam bursa
-src/js/05-chart.js    Lightweight Charts + data live kripto
-src/js/07-cash.js     modul kas
-src/js/08-app.js      penghubung semua modul
-build.py              menggabungkan semuanya jadi satu HTML (butuh node_modules)
-qa3.mjs               tes browser headless
-```
-Versi Python/Streamlit sebelumnya (`quant_terminal.zip`) sudah **digantikan** v1 HTML; jangan dilanjutkan.
-
-### Pelajaran teknis (jangan diulang)
-- Bayangan malam dengan grid sel 1 derajat plus `blur` butuh **12 detik per gambar** di mesin lambat dan membuat halaman macet. Solusi: satu poligon dari garis terminator. Selalu ukur waktu gambar canvas.
-- Lightweight Charts perlu `localization: { locale: 'en-US' }` supaya tidak error di lingkungan dengan locale aneh.
-- Di sandbox: `pkill -f chromium` di dalam perintah bash membunuh shell sendiri. Pakai `pkill -x chromium`.
-- Library peta tidak dipakai; peta 110m dari `world-atlas` (Natural Earth) sudah cukup, tapi tidak punya Singapura dan Hong Kong (hanya titik).
-
----
+### Cara memverifikasi sendiri (5 menit)
+1. `npm start`, buka http://localhost:8787, lalu halaman **Sumber data**. Semua penyedia yang dipakai harus "Tersambung".
+2. Bandingkan 3 angka dengan situs resminya: inflasi Indonesia (imf.org/external/datamapper), harga BTC (binance.com), US 10Y (fred.stlouisfed.org/series/DGS10). Klik angkanya di aplikasi untuk melihat endpoint dan waktunya.
+3. Halaman Kapal: setelah 1–2 menit dengan kunci AISStream, kapal muncul di kotak pantau. Cocokkan satu MMSI di MarineTraffic (tautan ada di panel kapal).
 
 ## 4. Keputusan desain (sudah diambil, pertahankan)
 
@@ -152,6 +141,7 @@ Perkiraan waktu adalah tebakan kasar saya untuk pemula yang mengerjakan dengan A
 | Fase | Isi | Hasil yang bisa dibuktikan | Perkiraan |
 |---|---|---|---|
 | 0 | v1 HTML dengan data simulasi | **Selesai** | selesai |
+| v2 | Fase 1–4a sebagian besar + globe 3D, kapal, negara, berita, makro, palet perintah (lihat bagian 3) | **Selesai, menunggu verifikasi dengan internet asli** | 5 Okt 2026 |
 | 1 | Fondasi data nyata: Worker proxy, provider abstraction, lencana kualitas data, harga AS (Finnhub), kripto (Binance) | Harga AAPL dan BTC di app sama dengan sumber lain dalam batas wajar; saat sumber diputus, UI jujur | 1 sampai 2 minggu |
 | 2 | Peta berlapis (Pasar, Ekonomi, Risiko, Berita, Whale) + makro World Bank + command bar | Klik negara membuka panel dengan PDB, inflasi, pengangguran asli dan sumbernya | 1 sampai 2 minggu |
 | 3 | Berita dan politik: umpan berita per negara dan per saham, sinyal GDELT, kalender peristiwa, skor risiko eksperimental yang transparan | Judul berita muncul dengan sumber, waktu, tautan; metodologi skor terbuka | 1 sampai 2 minggu |
@@ -183,6 +173,13 @@ Perkiraan waktu adalah tebakan kasar saya untuk pemula yang mengerjakan dengan A
 ---
 
 ## 9. Pertanyaan terbuka untuk pemilik
+
+Pertanyaan v2 yang perlu dijawab:
+- Aktifkan Yahoo tidak resmi untuk saham IDX dan indeks dunia? (risiko ketentuan layanan; bawaan mati)
+- Butuh data kapal lebih lengkap dari AISStream gratis? (pilihan berbayar: Spire, MarineTraffic)
+- Mau dipublikasikan? Kalau ya, server perlu dipindah ke Cloudflare Worker/Railway dan ketentuan tiap API dibaca ulang.
+
+Pertanyaan v1 (masih berlaku):
 
 1. Bursa mana yang paling penting punya data nyata: AS, Indonesia, atau kripto? (Menentukan sumber di Fase 1.)
 2. Boleh memakai endpoint tidak resmi untuk saham IDX dengan label "tidak resmi", atau harus data resmi saja?

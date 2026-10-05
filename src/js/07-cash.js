@@ -152,13 +152,18 @@ const Cash = (() => {
         <div class="rates-grid">${BUCKETS.map((b, bi) => `<fieldset><legend>${b}</legend>${SCEN.map((s, si) => `<label>${s} %<input type="number" step="0.5" data-r="${bi}-${si}" value="${st.rates[bi][si]}"></label>`).join('')}</fieldset>`).join('')}</div></details></section>`;
 
       const eq = sm.surplus * w[2];
-      const cand = STOCKS.filter(i => i.type === 'stock').map(i => ({ i, h: evaluate(i) })).filter(x => x.h.label === 'Sehat').sort((a, b) => b.h.score - a.h.score);
+      const cand = !State.demo ? [] : STOCKS.filter(i => i.type === 'stock').map(i => ({ i, h: evaluate(i) })).filter(x => x.h.label === 'Sehat').sort((a, b) => b.h.score - a.h.score);
+      if (!State.demo) {
+        html += `<section class="card"><div class="card-head"><h2>Kandidat screening dari daftar saham</h2><span class="spacer"></span>${qBadge('unavailable')}</div>
+          <p class="callout">Kantong saham profil ${esc(st.profile.toLowerCase())} bernilai <strong>${rp(eq)}</strong>. Screening otomatis dimatikan karena skor fundamental v1 memakai laporan keuangan sintetis. Untuk saham AS, lihat tab Fundamental di halaman Pasar (Finnhub). Nyalakan mode demo di Pengaturan bila ingin melihat contoh screening dengan data simulasi.</p></section>`;
+      } else {
       html += `<section class="card"><div class="card-head"><h2>Kandidat screening dari daftar saham</h2><span class="spacer"></span><span class="flag">Data simulasi</span></div>
         <p class="callout">Kantong saham profil ${esc(st.profile.toLowerCase())} bernilai <strong>${rp(eq)}</strong>. Saham di daftar kanan yang lolos skor fundamental (berlabel Sehat):</p>`;
       html += cand.length ? `<table class="cand"><thead><tr><th scope="col">Kode</th><th scope="col">Nama</th><th scope="col">Sektor</th><th scope="col" class="num">Skor</th><th scope="col" class="num">Piotroski</th></tr></thead><tbody>
         ${cand.map(({ i, h }) => `<tr><td><button type="button" data-pick="${i.sym}" style="color:var(--brass);font-weight:600">${i.sym}</button></td><td>${esc(i.name)}</td><td>${esc(i.sector)}</td><td class="num">${h.score.toFixed(0)}/100</td><td class="num">${h.p.score}/${h.p.available}</td></tr>`).join('')}</tbody></table>`
         : `<p class="callout">Tidak ada saham berlabel Sehat saat ini.</p>`;
       html += `<p class="warn">Ini hasil screening otomatis dari rasio keuangan sintetis, bukan rekomendasi beli. Skor fundamental tidak memperhitungkan harga (mahal atau murah), berita, atau valuasi, dan saham berlabel Sehat tetap bisa turun. Untuk uang sungguhan, konsultasikan ke penasihat keuangan berlisensi.</p></section>`;
+      }
     }
     out.innerHTML = html;
   }

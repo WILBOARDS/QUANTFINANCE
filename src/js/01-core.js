@@ -70,6 +70,8 @@ function fmtCompact(x) {
   return x.toFixed(0);
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/* tautan dari sumber luar hanya boleh http(s): mencegah "javascript:" dari umpan berita yang tidak tepercaya */
+function safeUrl(u) { const s = String(u || '').trim(); return esc(/^https?:\/\//i.test(s) ? s : '#'); }
 const sign = x => (x > 0 ? 'up' : x < 0 ? 'down' : '');
 
 /* ---------- toast ---------- */
@@ -210,6 +212,7 @@ const State = {
   tf: Store.get('tf', '1Y'), type: Store.get('type', 'candle'), ma: Store.get('ma', true),
   forceOpen: Store.get('force', false),
   liveCrypto: Store.get('liveCrypto', true),
+  demo: Store.get('demo', false),      // mode demo: harga simulasi untuk aset tanpa sumber nyata (bawaan mati)
   selMarket: null,
 };
 if (!BY[State.sel]) State.sel = 'BBCA';

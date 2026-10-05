@@ -156,9 +156,10 @@ function touchBars(inst) {
 function pct(inst) { return inst.price / inst.prev - 1; }
 
 function simTick() {
+  if (!State.demo) return;                 // di luar mode demo tidak ada harga buatan
   const changed = [];
   for (const inst of INSTS) {
-    if (inst.live) continue;
+    if (inst.live || inst.real) continue;
     if (!isOpen(inst)) continue;
     stepInst(inst);
     touchBars(inst);

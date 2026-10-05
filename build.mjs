@@ -44,14 +44,28 @@ const meta = wc
       c.independent ? 1 : 0,
     ];
   });
+const land50 = JSON.parse(read(join(nm, 'world-atlas/land-50m.json')));
 const world = 'const WORLD_TOPO = ' + JSON.stringify(topo) + ';\n' +
+  '/* garis pantai detail 1:50m, hanya dipakai saat globe di-zoom dekat (selat, pelabuhan) */\n' +
+  'const LAND50_TOPO = ' + JSON.stringify(land50) + ';\n' +
   '/* [iso3, iso2, numerik, nama EN, nama ID, mata uang, lat, lon, region, subregion, ibu kota, merdeka] */\n' +
   'const COUNTRY_META = ' + JSON.stringify(meta) + ';';
+
+/* ---------- modul bersama (shared/*.mjs) dibungkus jadi namespace ----------
+   Contoh: shared/parsers.mjs -> const Parsers = (() => { ...; return { parseWorldBank, ... }; })();
+   Dengan begitu nama fungsi di sana tidak bentrok dengan kode src/js. */
+function wrapShared(file, ns) {
+  const src = read(join(root, 'shared', file));
+  const names = [...src.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
+  const body = src.replace(/^export\s+/gm, '');
+  return `/* ===== shared/${file} ===== */\nconst ${ns} = (() => {\n${body}\nreturn { ${names.join(', ')} };\n})();\n`;
+}
+const shared = wrapShared('parsers.mjs', 'Parsers') + wrapShared('analytics.mjs', 'Analytics');
 
 /* ---------- kode aplikasi: semua file src/js diurutkan menurut nama ---------- */
 const jsDir = join(root, 'src/js');
 const jsFiles = readdirSync(jsDir).filter(f => f.endsWith('.js')).sort();
-const js = jsFiles.map(f => `/* ===== ${f} ===== */\n` + read(join(jsDir, f))).join('\n');
+const js = shared + jsFiles.map(f => `/* ===== ${f} ===== */\n` + read(join(jsDir, f))).join('\n');
 
 const safe = s => s.replace(/<\/script/gi, '<\\/script');
 let html = read(join(root, 'src/template.html'));
