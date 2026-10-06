@@ -18,9 +18,10 @@ Ada dua cara. Cara A paling mudah, cara B membuka semua fitur.
 2. Buka folder proyek di VS Code, lalu buka Terminal (`Ctrl + ` `).
 3. Jalankan:
    ```
-   npm install
+   npm ci
    npm run build
    ```
+   `npm ci` memasang versi persis dari `package-lock.json` (build jadi bisa diulang). Kalau ragu lingkunganmu sudah benar, jalankan `npm run doctor`.
 4. Salin file `.env.example` menjadi `.env`. Isi kunci yang kamu punya (boleh dikosongkan dulu):
    - `AISSTREAM_API_KEY` : kapal live global, gratis di https://aisstream.io (login pakai GitHub)
    - `FINNHUB_API_KEY` : harga saham AS, fundamental, insider, earnings, gratis di https://finnhub.io/register
@@ -84,9 +85,17 @@ docs/                    konteks proyek dan prompt
 ## Tes
 
 ```
-npm test        # 25 unit test parser dan kalkulasi
-npm run e2e     # 18 skenario browser (butuh Chromium/Edge; set CHROME_PATH kalau perlu)
+npm run doctor       # cek Node, versi paket, font, browser E2E
+npm test             # unit test parser, kalkulasi, pemindai rahasia
+npm run e2e:install  # SEKALI saja: unduh Chromium yang cocok untuk tes E2E
+npm run e2e          # build + skenario browser (atau set CHROME_PATH ke chrome.exe/msedge.exe)
+npm run e2e -- B4    # hanya skenario yang namanya mengandung "B4"
+npm run secrets      # cari API key bocor di file terlacak, dist, dan seluruh riwayat git
 ```
+
+Skenario E2E ada di `qa/scenarios/*.mjs`. Setiap skenario otomatis GAGAL bila ada exception tak tertangkap, promise rejection tak ditangani, console.error (selain kegagalan jaringan yang disengaja), atau indikator loading yang macet lebih dari 20 detik. Screenshot ada di `qa/out/`.
+
+Font disimpan di `vendor/fonts` (lisensi OFL, file lisensinya ikut), jadi build tidak bergantung pada struktur paket font di node_modules.
 
 Tes e2e memakai **sumber palsu** (`qa/fake-upstream.mjs`) yang meniru format API asli, karena lingkungan pengembangan tidak punya internet. Itu menguji alur aplikasi, **bukan** membuktikan API sungguhan merespons. Cara memverifikasi dengan internet sungguhan ada di `docs/QUANTTERMINAL_CONTEXT.md` bagian 3.
 
