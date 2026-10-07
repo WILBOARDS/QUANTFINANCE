@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#060E1A">
+<meta name="description" content="QuantTerminal: terminal intelijen pasar global dengan globe 3D, kondisi ekonomi semua negara, berita, dan pergerakan kapal dari sumber data gratis.">
+<title>QuantTerminal</title>
+<!-- Font: Plus Jakarta Sans & IBM Plex Mono (SIL OFL), ditanam langsung di file ini. Grafik: TradingView Lightweight Charts (Apache-2.0). Peta: Natural Earth via world-atlas (public domain). Globe: d3-geo (ISC). Metadata negara: world-countries (ODbL), i18n-iso-countries (MIT). -->
+<style>
+/*__FONTS__*/
+/*__CSS__*/
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Lompat ke konten utama</a>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M12 3.5 14 10l6.5 2-6.5 2-2 6.5-2-6.5L3.5 12 10 10z" fill="currentColor"/>
+    </svg>
+    <span>QuantTerminal</span>
+  </div>
+  <div class="cmdbar" id="cmdBar" role="search">
+    <button type="button" class="cmd-icon" id="btnCmd" aria-label="Fokus ke bilah perintah (Ctrl+K)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+    <input id="cmdInput" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdDrop" aria-label="Cari aset atau ketik perintah, contoh AAPL GP" placeholder="Cari atau perintah: AAPL GP · ID ECON · WATCH AAPL · HELP" autocomplete="off" spellcheck="false">
+    <kbd class="cmd-kbd">Ctrl K</kbd>
+    <div class="cmd-drop" id="cmdDrop" role="listbox" aria-label="Saran" hidden></div>
+  </div>
+  <div class="top-right">
+    <button type="button" class="chip" id="mktChip" title="Status bursa"><i class="dot"></i><span id="mktText">Bursa</span></button>
+    <button type="button" class="chip" id="errChip" data-state="ok" title="Log error internal (klik untuk melihat)" hidden><i class="dot"></i><span id="errText">0</span></button>
+    <button type="button" class="chip" id="srvChip" data-state="off" title="Status server lokal"><i class="dot"></i><span id="srvText">Memeriksa server</span></button>
+    <span class="chip" id="modeChip" data-state="sim" title="Sumber data saat ini"><i class="dot"></i><span id="modeText">Data simulasi</span></span>
+    <time class="clock" id="clock"></time>
+    <button type="button" class="icon-btn" id="btnSettings" aria-label="Pengaturan">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="tape" aria-hidden="true" inert><div class="tape-track" id="tapeTrack"></div></div>
+
+<div class="shell">
+  <nav class="side-nav" aria-label="Halaman">
+    <div class="side-group" data-group="pasar"><span class="sg">Pasar</span>
+      <button type="button" data-page="market" aria-current="page" title="Pasar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span class="sl">Pasar</span><span class="ss">Pasar</span></button>
+      <button type="button" data-page="watchlist" title="Watchlist"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg><span class="sl">Watchlist</span><span class="ss">Watchlist</span></button>
+      <button type="button" data-page="alerts" title="Alert"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="sl">Alert</span><span class="ss">Alert</span></button>
+    </div>
+    <div class="side-group" data-group="riset"><span class="sg">Riset</span>
+      <button type="button" data-page="news" title="Berita"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg><span class="sl">Berita</span><span class="ss">Berita</span></button>
+      <button type="button" data-page="macro" title="Makro"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17l5-6 4 3 6-8 3 3"/></svg><span class="sl">Makro</span><span class="ss">Makro</span></button>
+      <button type="button" data-page="country" title="Negara"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span class="sl">Negara</span><span class="ss">Negara</span></button>
+    </div>
+    <div class="side-group" data-group="intel"><span class="sg">Maritim &amp; intel</span>
+      <button type="button" data-page="intel" title="Intel 3D"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><circle cx="15" cy="9" r="1.5"/></svg><span class="sl">Intel 3D</span><span class="ss">Intel</span></button>
+      <button type="button" data-page="ships" title="Kapal"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 16l2 4h14l2-4H3z"/><path d="M12 4v12M8 8h8"/></svg><span class="sl">Kapal</span><span class="ss">Kapal</span></button>
+    </div>
+    <div class="side-group" data-group="portofolio"><span class="sg">Portofolio</span>
+      <button type="button" data-page="cash" title="Kas dan alokasi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span class="sl">Kas dan alokasi</span><span class="ss">Kas</span></button>
+    </div>
+    <div class="side-group" data-group="sistem"><span class="sg">Sistem</span>
+      <button type="button" data-page="sources" title="Sumber data"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="sl">Sumber data</span><span class="ss">Sumber</span></button>
+      <button type="button" data-page="about" title="Metodologi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span class="sl">Metodologi</span><span class="ss">Metode</span></button>
+    </div>
+    <div class="side-foot" id="panelHidden" hidden></div>
+  </nav>
+<main id="main">
+
+  <!-- ============ HALAMAN: PASAR ============ -->
+  <section id="page-market" class="page market-grid">
+    <div class="demo-banner" id="demoBanner" hidden></div>
+
+    <section class="card map-card" aria-label="Peta pasar global">
+      <div class="card-head">
+        <div class="seg" role="group" aria-label="Tampilan peta">
+          <button type="button" data-view="map" aria-pressed="true">Peta</button>
+          <button type="button" data-view="globe" aria-pressed="false">Globe 3D</button>
+          <button type="button" data-view="hours" aria-pressed="false">Jam bursa</button>
+        </div>
+        <span class="meta" id="mapMeta"></span>
+        <span class="spacer"></span>
+        <div class="legend" aria-hidden="true"><span>turun</span><i class="grad"></i><span>naik</span></div>
+      </div>
+      <div class="map-body" id="mapBody">
+        <canvas id="mapBase" role="img" aria-label="Peta dunia berwarna menurut perubahan indeks saham hari ini"></canvas>
+        <canvas id="mapTop"></canvas>
+        <div class="tip" id="mapTip" hidden></div>
+      </div>
+      <div class="globe-host" id="marketGlobe" hidden></div>
+      <div class="hours-body" id="hoursBody" hidden></div>
+    </section>
+
+    <section class="card chart-card" aria-label="Grafik harga">
+      <div class="card-head chart-head">
+        <div class="sym-block">
+          <h2 id="cSym">BBCA</h2>
+          <span class="nm" id="cName"></span>
+        </div>
+        <div class="price-block">
+          <span class="num big" id="cPrice">–</span>
+          <span class="pill" id="cChg">–</span>
+        </div>
+        <span class="chip tiny" id="cStatus"></span>
+        <span class="q-wrap" id="cQual"></span>
+        <span class="spacer"></span>
+        <div class="seg" id="tfSeg" role="group" aria-label="Rentang waktu">
+          <button type="button" data-tf="1D" aria-pressed="false">1D</button>
+          <button type="button" data-tf="1M" aria-pressed="false">1M</button>
+          <button type="button" data-tf="3M" aria-pressed="false">3M</button>
+          <button type="button" data-tf="6M" aria-pressed="false">6M</button>
+          <button type="button" data-tf="1Y" aria-pressed="true">1Y</button>
+          <button type="button" data-tf="5Y" aria-pressed="false">5Y</button>
+        </div>
+      </div>
+      <div class="chart-tools">
+        <div class="seg" id="typeSeg" role="group" aria-label="Jenis grafik">
+          <button type="button" data-type="candle" aria-pressed="true">Lilin</button>
+          <button type="button" data-type="area" aria-pressed="false">Area</button>
+          <button type="button" data-type="line" aria-pressed="false">Garis</button>
+        </div>
+        <button type="button" class="toggle" id="btnMA" aria-pressed="true">MA 20/50</button>
+        <span class="q-wrap" id="cHist" title="Sumber riwayat grafik"></span>
+        <span class="spacer"></span>
+        <div class="ohlc" id="ohlc" aria-live="off"></div>
+      </div>
+      <div class="chart-wrap">
+        <div id="chart"></div>
+        <div class="chart-na" id="chartNa" hidden></div>
+      </div>
+      <dl class="stats" id="stats"></dl>
+    </section>
+
+    <section class="card health-card" aria-label="Intelijen aset">
+      <div class="card-head">
+        <h2>Intelijen aset</h2>
+        <span class="spacer"></span>
+        <span class="flag" id="hFlag">Data simulasi</span>
+      </div>
+      <div class="health-body" id="healthBody"></div>
+    </section>
+
+    <aside class="card watch-card" aria-label="Daftar saham">
+      <div class="card-head">
+        <h2>Saham dan aset</h2>
+        <span class="meta" id="wCount"></span>
+      </div>
+      <div class="search">
+        <input id="q" type="search" placeholder="Cari kode atau nama. Tekan / untuk fokus" autocomplete="off" spellcheck="false" aria-label="Cari saham">
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Filter wilayah"></div>
+      <div class="seg wide" id="wTabs" role="group" aria-label="Urutan daftar">
+        <button type="button" data-tab="list" aria-pressed="true">Daftar</button>
+        <button type="button" data-tab="up" aria-pressed="false" title="Urutkan dari yang naik paling tinggi">Naik</button>
+        <button type="button" data-tab="down" aria-pressed="false" title="Urutkan dari yang turun paling dalam">Turun</button>
+      </div>
+      <ul class="rows" id="rows"></ul>
+      <div class="breadth" id="breadth"></div>
+    </aside>
+  </section>
+
+  <!-- ============ HALAMAN: INTEL 3D ============ -->
+  <section id="page-intel" class="page intel-grid" hidden>
+    <section class="card globe-card" aria-label="Globe intelijen 3D">
+      <div class="card-head">
+        <h2>Globe intelijen</h2>
+        <div class="layer-chips" id="layerChips" role="group" aria-label="Lapisan globe"></div>
+        <span class="spacer"></span>
+        <label class="sel-wrap"><span class="sr">Warna negara</span>
+          <select id="econMetric" aria-label="Metrik warna negara"></select></label>
+        <div class="seg" role="group" aria-label="Kontrol globe">
+          <button type="button" data-g="out" aria-label="Perkecil">−</button>
+          <button type="button" data-g="in" aria-label="Perbesar">+</button>
+          <button type="button" data-g="spin" aria-pressed="true" title="Putar otomatis">Putar</button>
+          <button type="button" data-g="reset">Reset</button>
+        </div>
+      </div>
+      <div class="globe-host big" id="intelGlobe"></div>
+      <div class="globe-foot" id="intelLegend"></div>
+    </section>
+    <aside class="card intel-side" aria-label="Detail pilihan">
+      <div class="card-head"><h2 id="intelSideTitle">Detail</h2><span class="spacer"></span><span id="intelSideBadge"></span></div>
+      <div class="side-body" id="intelSide"></div>
+    </aside>
+    <section class="card intel-feed" aria-label="Peristiwa terbaru">
+      <div class="card-head">
+        <h2>Peristiwa terbaru</h2>
+        <div class="seg" id="feedSeg" role="group" aria-label="Jenis peristiwa">
+          <button type="button" data-feed="hazards" aria-pressed="true">Bencana</button>
+          <button type="button" data-feed="news" aria-pressed="false">Lokasi berita</button>
+          <button type="button" data-feed="choke" aria-pressed="false">Chokepoint</button>
+        </div>
+        <span class="spacer"></span><span class="meta" id="feedMeta"></span>
+      </div>
+      <div class="feed-body" id="intelFeed"></div>
+    </section>
+  </section>
+
+  <!-- ============ HALAMAN: NEGARA ============ -->
+  <section id="page-country" class="page country-grid" hidden>
+    <aside class="card clist-card" aria-label="Daftar semua negara">
+      <div class="card-head"><h2>Semua negara</h2><span class="meta" id="cCount"></span><span class="spacer"></span>
+        <button type="button" class="mini-btn" id="cExport" title="Unduh tabel sebagai CSV">CSV</button></div>
+      <div class="search"><input id="cq" type="search" placeholder="Cari negara, kode ISO, atau ibu kota" autocomplete="off" aria-label="Cari negara"></div>
+      <div class="chips" id="cRegions" role="group" aria-label="Filter benua"></div>
+      <div class="table-wrap" id="cTableWrap"><table class="dense" id="cTable"></table></div>
+      <div class="src-foot" id="cSrc"></div>
+    </aside>
+    <section class="card cdetail-card" aria-label="Intelijen negara">
+      <div class="cdetail" id="cDetail"></div>
+    </section>
+  </section>
+
+  <!-- ============ HALAMAN: BERITA ============ -->
+  <section id="page-news" class="page news-grid" hidden>
+    <section class="card news-main" aria-label="Terminal berita">
+      <div class="card-head">
+        <h2>Terminal berita</h2>
+        <div class="chips inline" id="newsCats" role="group" aria-label="Kategori berita"></div>
+        <span class="spacer"></span>
+        <label class="sel-wrap"><span class="sr">Rentang waktu</span>
+          <select id="newsSpan" aria-label="Rentang waktu berita"><option value="6h">6 jam</option><option value="24h" selected>24 jam</option><option value="3d">3 hari</option><option value="7d">7 hari</option></select></label>
+        <button type="button" class="mini-btn" id="newsRefresh">Muat ulang</button>
+        <button type="button" class="mini-btn" id="newsExport">CSV</button>
+      </div>
+      <form class="news-gq row" id="newsGqForm" role="search" aria-label="Cari berita di GDELT">
+        <input id="newsGq" type="search" maxlength="80" placeholder="Cari di GDELT (kueri baru): rupiah, Bank Indonesia, nickel" autocomplete="off" spellcheck="false" aria-label="Kueri GDELT">
+        <button type="submit" class="mini-btn">Cari di GDELT</button>
+        <button type="button" class="mini-btn" id="newsGqClear" hidden>Kembali ke kategori</button>
+        <span class="meta" id="newsMode" role="status"></span>
+      </form>
+      <div class="news-ctl row">
+        <div class="seg" role="group" aria-label="Tampilan" id="newsView">
+          <button type="button" data-view="breaking" aria-pressed="false" title="Judul 2 jam terakhir, terbaru dulu">Breaking</button>
+          <button type="button" data-view="time" aria-pressed="true" title="Semua judul, terbaru dulu">Terbaru</button>
+          <button type="button" data-view="impact" aria-pressed="false" title="Skor dampak heuristik tertinggi dulu (Analisis otomatis)">Paling relevan</button>
+        </div>
+        <input id="newsQ" type="search" placeholder="Saring hasil: judul, sumber, negara" autocomplete="off" aria-label="Saring hasil yang sudah dimuat">
+        <select id="newsFTheme" aria-label="Saring tema (Analisis otomatis)"><option value="">Semua tema</option></select>
+        <select id="newsFCountry" aria-label="Saring negara sumber"><option value="">Semua negara sumber</option></select>
+        <select id="newsFDomain" aria-label="Saring domain sumber"><option value="">Semua domain</option></select>
+        <label class="chk"><input type="checkbox" id="newsFSpec"> Hanya spekulatif</label>
+      </div>
+      <div class="table-wrap" id="newsWrap"><table class="dense news-table" id="newsTable"></table></div>
+      <div class="src-foot" id="newsSrc"></div>
+    </section>
+    <aside class="card news-side" aria-label="Analisis berita terpilih">
+      <div class="card-head"><h2>Kenapa berita ini penting</h2></div>
+      <div class="side-body" id="newsSide"></div>
+    </aside>
+  </section>
+
+  <!-- ============ HALAMAN: KAPAL ============ -->
+  <section id="page-ships" class="page ships-grid" hidden>
+    <section class="card ships-globe-card" aria-label="Globe kapal">
+      <div class="card-head">
+        <h2>Pergerakan kapal</h2>
+        <div class="chips inline" id="shipJump" role="group" aria-label="Lompat ke selat"></div>
+        <span class="spacer"></span><span class="meta" id="shipMeta"></span>
+      </div>
+      <div class="globe-host" id="shipGlobe"></div>
+      <div class="globe-foot" id="shipLegend"></div>
+    </section>
+    <aside class="card ship-side" aria-label="Detail kapal atau selat">
+      <div class="card-head"><h2 id="shipSideTitle">Detail</h2></div>
+      <div class="side-body" id="shipSide"></div>
+    </aside>
+    <section class="card choke-card" aria-label="Transit chokepoint">
+      <div class="card-head"><h2>Chokepoint dunia</h2><span class="meta">transit kapal per hari, IMF PortWatch</span><span class="spacer"></span><button type="button" class="mini-btn" id="chokeExport">CSV</button></div>
+      <div class="table-wrap" id="chokeWrap"></div>
+    </section>
+    <section class="card vessel-card" aria-label="Kapal live">
+      <div class="card-head"><h2>Kapal live (AIS)</h2>
+        <div class="chips inline" id="vesselCls" role="group" aria-label="Tipe kapal"></div>
+        <span class="spacer"></span>
+        <input id="vesselQ" class="mini-input" type="search" placeholder="Nama, MMSI, tujuan" aria-label="Cari kapal" autocomplete="off">
+      </div>
+      <div class="table-wrap" id="vesselWrap"></div>
+    </section>
+  </section>
+
+  <!-- ============ HALAMAN: MAKRO ============ -->
+  <section id="page-macro" class="page macro-grid" hidden>
+    <section class="card regime-card" aria-label="Rezim pasar"><div class="card-head"><h2>Rezim pasar</h2><span class="flag" title="Model aturan buatan aplikasi; belum divalidasi secara statistik">Eksperimental</span><span class="spacer"></span><span id="regimeBadge"></span></div><div class="side-body" id="regimeBody"></div></section>
+    <section class="card curve-card" aria-label="Kurva imbal hasil"><div class="card-head"><h2>Obligasi pemerintah AS</h2><span class="spacer"></span><span class="meta" id="curveMeta"></span></div><div class="side-body" id="curveBody"></div></section>
+    <section class="card macro-card" aria-label="Indikator makro"><div class="card-head"><h2>Dasbor makro AS</h2><span class="spacer"></span><button type="button" class="mini-btn" id="macroExport">CSV</button></div><div class="table-wrap" id="macroBody"></div></section>
+    <section class="card cmdty-card" aria-label="Komoditas"><div class="card-head"><h2>Komoditas dan energi</h2></div><div class="table-wrap" id="cmdtyBody"></div></section>
+    <section class="card survey-card" aria-label="Survei manufaktur dan breadth"><div class="card-head"><h2>Survei manufaktur regional (pengganti PMI)</h2><span class="spacer"></span><span class="meta">FRED, bulanan</span></div><div class="table-wrap" id="surveyBody"></div></section>
+    <section class="card cb-card" aria-label="Bank sentral"><div class="card-head"><h2>Bank sentral</h2><span class="meta">suku bunga kebijakan, BIS</span></div><div class="table-wrap" id="cbBody"></div></section>
+    <section class="card corr-card" aria-label="Matriks korelasi"><div class="card-head"><h2>Korelasi lintas aset</h2>
+      <div class="seg" id="corrSeg" role="group" aria-label="Jangka waktu korelasi">
+        <button type="button" data-tf="21" aria-pressed="false">1M</button><button type="button" data-tf="63" aria-pressed="false">3M</button><button type="button" data-tf="126" aria-pressed="true">6M</button><button type="button" data-tf="252" aria-pressed="false">1Y</button><button type="button" data-tf="756" aria-pressed="false">3Y</button><button type="button" data-tf="1260" aria-pressed="false">5Y</button>
+      </div></div><div class="side-body" id="corrBody"></div></section>
+    <section class="card stress-card" aria-label="Uji tekanan portofolio"><div class="card-head"><h2>Uji tekanan portofolio simulasi</h2><span class="flag">Edukasi</span></div><div class="side-body" id="stressBody"></div></section>
+  </section>
+
+  <!-- ============ HALAMAN: KAS ============ -->
+  <section id="page-cash" class="page cash" hidden>
+    <div class="cash-grid">
+      <section class="card cash-in" aria-label="Data kas">
+        <div class="card-head"><h2>Kondisi kas bisnismu</h2></div>
+        <div class="pad">
+          <div class="field">
+            <label for="cCash">Kas saat ini (Rp)</label>
+            <input id="cCash" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="cMonths">Cadangan darurat: <output id="cMonthsOut"></output> bulan biaya</label>
+            <input id="cMonths" type="range" min="1" max="12" step="1">
+          </div>
+          <fieldset class="field">
+            <legend>Profil risiko</legend>
+            <div class="seg wide" id="cProfile" role="group" aria-label="Profil risiko">
+              <button type="button" data-p="Konservatif" aria-pressed="false">Konservatif</button>
+              <button type="button" data-p="Moderat" aria-pressed="true">Moderat</button>
+              <button type="button" data-p="Agresif" aria-pressed="false">Agresif</button>
+            </div>
+          </fieldset>
+          <div class="field">
+            <label for="cYears">Horizon: <output id="cYearsOut"></output> tahun</label>
+            <input id="cYears" type="range" min="1" max="20" step="1">
+          </div>
+          <div class="field">
+            <label for="cAdd">Tambahan investasi per bulan (Rp)</label>
+            <input id="cAdd" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+        <div class="card-head sub"><h2>Arus kas 6 bulan terakhir</h2></div>
+        <div class="pad">
+          <table class="flow">
+            <thead><tr><th scope="col">Bulan</th><th scope="col">Pemasukan (Rp)</th><th scope="col">Pengeluaran (Rp)</th></tr></thead>
+            <tbody id="flowBody"></tbody>
+          </table>
+          <p class="hint">Angka awal hanya contoh. Ganti dengan data bisnismu sendiri, hasilnya langsung berubah.</p>
+        </div>
+      </section>
+
+      <div class="cash-out" id="cashOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ HALAMAN: SUMBER DATA ============ -->
+  <section id="page-sources" class="page sources" hidden>
+    <section class="card" aria-label="Server lokal"><div class="card-head"><h2>Server lokal</h2><span class="spacer"></span><button type="button" class="mini-btn" id="srvRetry">Cek ulang</button></div><div class="side-body" id="srvBody"></div></section>
+    <section class="card" aria-label="Penyedia data"><div class="card-head"><h2>Penyedia data</h2><span class="meta" id="provMeta"></span><span class="spacer"></span><button type="button" class="mini-btn" id="provExport">JSON</button></div><div class="table-wrap" id="provBody"></div></section>
+    <section class="card" aria-label="Kesehatan data"><div class="card-head"><h2>Kesehatan data</h2><span class="meta">kesegaran setiap kumpulan data yang sudah dimuat</span></div><div class="table-wrap" id="healthData"></div></section>
+    <section class="card perf-card" id="perfCard" aria-label="Kinerja aplikasi"><div class="card-head"><h2>Kinerja aplikasi</h2><span class="meta">diukur di browser ini, sesi ini</span><span class="spacer"></span><button type="button" class="mini-btn" id="perfRefresh">Ukur ulang</button></div><div class="table-wrap" id="perfBody"></div></section>
+    <section class="card errlog-card" id="errLogCard" aria-label="Log error internal"><div class="card-head"><h2>Log error internal</h2><span class="meta" id="errLogMeta"></span><span class="spacer"></span><button type="button" class="mini-btn" id="errLogExport">JSON</button><button type="button" class="mini-btn" id="errLogClear">Kosongkan</button></div><div class="table-wrap" id="errLog"></div></section>
+  </section>
+
+  <!-- ============ HALAMAN: METODOLOGI ============ -->
+  <!--__PAGES__-->
+
+  <section id="page-about" class="page about" tabindex="0" aria-label="Metodologi" hidden>
+    <article class="card prose">
+      <h1>Cara kerja dan batasannya</h1>
+      <p>Halaman ini menjelaskan apa yang dihitung aplikasi, supaya kamu bisa memeriksanya sendiri dan menjawab kalau ada yang bertanya.</p>
+
+      <h2>Skor kesehatan keuangan</h2>
+      <p><strong>Piotroski F-score (0 sampai 9).</strong> Sembilan pertanyaan ya atau tidak tentang laba, utang, likuiditas, dan efisiensi: ROA positif, arus kas operasi positif, margin naik, tidak menerbitkan saham baru, dan seterusnya. Makin tinggi, makin kuat fundamentalnya. Kriteria yang datanya tidak ada dilewati, lalu skor dinormalisasi.</p>
+      <p><strong>Altman Z''.</strong> Z'' = 6,56·X1 + 3,26·X2 + 6,72·X3 + 1,05·X4, dengan X1 modal kerja per aset, X2 laba ditahan per aset, X3 EBIT per aset, X4 ekuitas per total liabilitas. Di atas 2,6 berarti aman, 1,1 sampai 2,6 abu-abu, di bawah 1,1 berarti distress. Versi ini dipilih karena tidak butuh kapitalisasi pasar dan lebih cocok untuk perusahaan non-manufaktur dan pasar berkembang. Tidak berlaku untuk bank.</p>
+      <p><strong>Label gabungan.</strong> 60% Piotroski (dinormalisasi) ditambah 40% zona Altman, menjadi skor 0 sampai 100. Skor 70 ke atas berlabel Sehat, 45 sampai 69 Waspada, di bawah 45 Buruk. Ambang ini pilihan pembuat aplikasi, bukan standar baku.</p>
+
+      <h2>Yang perlu kamu tahu tentang datanya</h2>
+      <ul>
+        <li><strong>Tanpa Mode Demo, tidak ada angka buatan.</strong> Harga saham dan indeks hanya tampil bila sumber nyata tersedia (Finnhub dengan kunci, FRED, atau Yahoo tidak resmi yang kamu aktifkan di server). Kalau tidak ada, tertulis "Tidak tersedia".</li>
+        <li><strong>Mode Demo</strong> (Pengaturan) mengisi aset tanpa sumber nyata dengan angka acak berlabel "Simulasi". Jangan gunakan angka itu untuk menilai perusahaan sungguhan.</li>
+        <li>Harga kripto berasal dari Binance (publik, tanpa kunci), cadangannya CoinGecko (tertunda). Bila sumber berhenti mengirim data, label berubah menjadi "Basi"; bila semuanya gagal, "Tidak tersedia".</li>
+        <li>Jam buka bursa dihitung dari zona waktu dan jadwal reguler. Hari libur bursa tidak diperhitungkan.</li>
+        <li>Bayangan malam di peta dihitung dari posisi matahari saat ini.</li>
+        <li>Skor fundamental bukan prediksi harga. Tidak ada valuasi, berita, atau faktor makro di dalamnya.</li>
+        <li>Modul kas adalah simulasi dengan asumsi imbal hasil yang bisa kamu ubah. Itu bukan prediksi dan bukan nasihat investasi.</li>
+      </ul>
+
+      <h2>Versi 2: sumber data nyata dan labelnya</h2>
+      <p>Setiap angka di versi 2 membawa label kualitas. <strong>Live</strong> berarti hampir waktu-nyata, <strong>Tertunda</strong> berarti menit sampai hari, <strong>Harian</strong> berarti data akhir hari, <strong>Historis</strong> berarti statistik tahunan resmi, <strong>Proyeksi</strong> berarti perkiraan resmi lembaga seperti IMF, <strong>Kalkulasi</strong> berarti dihitung aplikasi dari data nyata, <strong>Inferensi</strong> berarti kesimpulan berbasis aturan, <strong>Simulasi</strong> berarti angka buatan, dan <strong>Tidak tersedia</strong> berarti sumbernya tidak bisa diakses. Klik angka yang bergaris bawah titik untuk melihat sumber, endpoint, waktu, dan rumusnya.</p>
+      <ul>
+        <li><strong>Ekonomi negara:</strong> IMF World Economic Outlook (DataMapper) untuk pertumbuhan, inflasi, pengangguran, utang, saldo fiskal, dan transaksi berjalan. Nilai tahun berjalan dan seterusnya adalah proyeksi IMF. World Bank WDI untuk cadangan devisa, perdagangan, energi, dan indikator tata kelola (WGI). Kalau IMF tidak bisa diakses, aplikasi memakai indikator World Bank yang setara.</li>
+        <li><strong>Skor negara (eksperimental):</strong> rata-rata lima kelompok (ekonomi, fiskal, moneter, eksternal, politik). Setiap komponen memakai rumus linear yang ditulis di panel skor. Komponen tanpa data dilewati. Skor ini pilihan pembuat aplikasi, bukan peringkat kredit, dan tidak memprediksi apa pun.</li>
+        <li><strong>Berita:</strong> GDELT DOC 2.0 mengumpulkan judul berita dunia. Aplikasi hanya menampilkan judul, sumber, waktu, dan tautan. Tema, sentimen, "judul spekulatif", dan skor dampak 0 sampai 100 dihitung dari kata kunci di judul. Itu heuristik kasar: bisa salah membaca sarkasme, konteks, atau bahasa lain.</li>
+        <li><strong>Rantai dampak berita:</strong> aturan umum ekonomi (misalnya minyak naik, inflasi naik, ekspektasi suku bunga naik). Itu inferensi analitis, bukan bukti sebab-akibat.</li>
+        <li><strong>Kapal:</strong> posisi AIS asli dari AISStream.io (global, butuh kunci gratis di server) dan Digitraffic (Laut Baltik, tanpa kunci). Kapal hanya digambar di posisi yang benar-benar dilaporkan. Animasi hanya bergerak di antara dua posisi asli. AIS tidak membedakan kapal kontainer dan curah, atau tanker LNG dan minyak; label "tanker gas" ditebak dari nama kapal. Transit chokepoint harian dari IMF PortWatch (jeda sekitar 4 hari).</li>
+        <li><strong>Bencana:</strong> gempa dari USGS (M4,5 ke atas, 7 hari) dan peristiwa GDACS (siklon, banjir, gunung api, kekeringan).</li>
+        <li><strong>Makro AS dan rezim pasar:</strong> FRED (St. Louis Fed). Rezim dihitung dari VIX, spread obligasi high-yield, kurva 10Y−2Y, S&amp;P 500 terhadap rata-rata 200 hari, dolar, dan minyak. Setiap bukti ditampilkan.</li>
+        <li><strong>Uji tekanan portofolio:</strong> sensitivitas kasar per kelas aset yang ditulis di tabel. Ini latihan berpikir, bukan model risiko profesional.</li>
+      </ul>
+
+      <h2>Cara memverifikasi</h2>
+      <p>Ambil satu perusahaan, cari laporan keuangan resminya, lalu hitung satu rasio dengan tangan, misalnya ROE sama dengan laba bersih dibagi ekuitas. Kalau hasilnya beda dengan aplikasi, ada yang salah. Jangan percaya angkanya sebelum cocok.</p>
+    </article>
+  </section>
+</main>
+</div>
+
+<dialog id="settings" aria-labelledby="setTitle">
+  <form method="dialog" class="dlg">
+    <h2 id="setTitle">Pengaturan</h2>
+    <label class="check"><input type="checkbox" id="setLive" checked>
+      <span><strong>Harga kripto live dari Binance</strong><br><small>Browser kamu menghubungi api.binance.com secara langsung, tanpa kunci API. Kalau gagal, dicoba cermin data-api.binance.vision lalu CoinGecko (tertunda); bila semua gagal, harga ditandai "Tidak tersedia", bukan disimulasikan.</small></span></label>
+    <label class="check"><input type="checkbox" id="setDemo">
+      <span><strong>Mode demo (harga simulasi)</strong><br><small>Saham dan indeks tanpa sumber nyata diisi angka acak supaya tampilan hidup. Semua angka simulasi diberi label. Bawaan: mati, sesuai aturan "jangan memalsukan data". Halaman dimuat ulang saat diubah.</small></span></label>
+    <label class="check"><input type="checkbox" id="setForce">
+      <span><strong>Gerakkan semua pasar walau tutup</strong><br><small>Hanya untuk demo. Biasanya harga hanya bergerak saat bursa sedang buka.</small></span></label>
+    <div class="field"><label for="setServer">Alamat server lokal (opsional)</label>
+      <div class="row-input"><input id="setServer" type="url" placeholder="http://localhost:8787" autocomplete="off" spellcheck="false"><button type="button" class="mini-btn" id="setServerTest">Tes</button></div>
+      <small class="hint" id="setServerOut">Server dipakai untuk kunci API, berita GDELT, kapal live, dan sumber yang menolak akses langsung dari browser.</small></div>
+    <p class="note">Harga saham asli butuh server lokal dengan kunci Finnhub (gratis). Tanpa itu, saham dan indeks tampil "tidak tersedia" kecuali mode demo dinyalakan.</p>
+    <div class="dlg-foot"><button type="submit" class="btn">Selesai</button></div>
+  </form>
+</dialog>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+<div class="lin-pop" id="linPop" role="dialog" aria-label="Asal-usul data" hidden></div>
+
+<footer class="credit">Grafik oleh <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Peta dari Natural Earth. Kurs <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a>. Data kapal Baltik © Fintraffic / digitraffic.fi, CC BY 4.0. Bukan nasihat investasi.</footer>
+
+<script>
+/*__LWC__*/
+</script>
+<script>
+/*__D3__*/
+</script>
+<script>
+/*__WORLD__*/
+</script>
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

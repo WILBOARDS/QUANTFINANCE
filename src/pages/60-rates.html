@@ -1,0 +1,21 @@
+  <!-- ============ HALAMAN: SUKU BUNGA DAN OBLIGASI (daftar + grafik aset terpilih) ============ -->
+  <section id="page-rates" class="page mk-page" hidden aria-label="Suku bunga dan obligasi">
+    <section class="card mk-card" aria-labelledby="mkRatesTitle">
+      <div class="card-head">
+        <h2 id="mkRatesTitle">Suku bunga dan obligasi</h2>
+        <span class="meta" id="mkRatesMeta" role="status"></span>
+        <span class="spacer"></span>
+        <button type="button" class="mini-btn" data-mk-reload>Muat ulang</button>
+        <button type="button" class="mini-btn" data-mk-csv title="Unduh tabel sebagai CSV">CSV</button>
+      </div>
+      <div class="mk-in">
+        <div class="mk-extra" id="mkRatesExtra"></div>
+        <div class="table-wrap" id="mkRatesBody"></div>
+        <p class="hint" id="mkRatesNote"></p>
+      </div>
+    </section>
+    <section class="card mk-chart-card" aria-label="Grafik aset terpilih">
+      <div class="card-head"><h2 id="mkRatesChartTitle">Grafik</h2><span class="spacer"></span><button type="button" class="mini-btn" data-mk-open>Buka detail</button></div>
+      <div class="mk-chart" id="mkRatesChart"></div>
+    </section>
+  </section>

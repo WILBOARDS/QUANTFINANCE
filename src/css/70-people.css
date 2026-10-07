@@ -1,0 +1,23 @@
+/* =====================================================================
+   TOKOH & PERUSAHAAN + bagian Pasar di halaman Negara
+   ===================================================================== */
+@layer pages {
+  .ppl-in { padding: 8px 14px 12px; display: grid; gap: 8px; min-inline-size: 0; max-inline-size: 960px; }
+  .ppl-form { display: flex; gap: 6px; }
+  .ppl-form input { flex: 1; min-inline-size: 0; min-block-size: 30px; }
+  .wd-hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12px; }
+  .wd-head h2 { margin: 0; font-size: 16px; color: var(--ink); }
+  .wd-g h3 { margin: 10px 0 4px; font-size: 12.5px; color: var(--ink); display: flex; gap: 6px; align-items: baseline; }
+  .wd-g ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 3px; font-size: 12.5px; }
+  .wd-past { color: var(--ink-3); }
+  .wd-p, .wd-q { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-num); }
+  .wd-sum { color: var(--ink-2); text-wrap: pretty; margin: 0; }
+  .cx-mkt { display: grid; gap: 8px; }
+  .cx-mkt .kv { margin: 0; }
+  .cx-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .cx-ch { border: 1px solid var(--line-soft); border-radius: 6px; padding: 6px 8px; min-inline-size: 0; }
+  .cx-ch h4 { margin: 0 0 2px; font-size: 11.5px; color: var(--ink-2); font-weight: 500; }
+  .cx-ch svg { inline-size: 100%; block-size: 70px; display: block; }
+  .cx-cos { display: flex; flex-wrap: wrap; gap: 4px; }
+  @media (max-width: 700px) { .cx-charts { grid-template-columns: minmax(0, 1fr); } }
+}

@@ -1,0 +1,33 @@
+  <!-- ============ HALAMAN: PORTOFOLIO (posisi disimpan di browser ini; tanpa simulasi) ============ -->
+  <section id="page-portfolio" class="page pf-page" hidden aria-label="Portofolio">
+    <section class="card pf-card" aria-labelledby="pfTitle">
+      <div class="card-head">
+        <h2 id="pfTitle">Portofolio</h2>
+        <span class="meta" id="pfMeta" role="status"></span>
+        <span class="spacer"></span>
+        <label class="meta" for="pfBase">Mata uang dasar</label>
+        <select id="pfBase"><option value="USD">USD</option><option value="IDR">IDR</option></select>
+        <button type="button" class="mini-btn" id="pfRefresh">Muat ulang</button>
+        <button type="button" class="mini-btn" id="pfExport" title="Unduh posisi dan nilainya sebagai CSV">CSV</button>
+        <label class="mini-btn pf-import">Impor CSV<input type="file" id="pfImport" accept=".csv,text/csv" class="sr"></label>
+      </div>
+      <div class="pf-in">
+        <form class="pf-form" id="pfForm" aria-label="Tambah atau ubah posisi">
+          <label>Kode <input id="pfSym" list="pfSymList" maxlength="20" autocomplete="off" spellcheck="false" required placeholder="AAPL, BTC, EURUSD"></label>
+          <datalist id="pfSymList"></datalist>
+          <label>Jumlah <input id="pfQty" inputmode="decimal" required placeholder="10"></label>
+          <label>Harga rata-rata <input id="pfAvg" inputmode="decimal" placeholder="opsional"></label>
+          <label>Mata uang harga rata-rata <select id="pfCur"><option value="">sama dengan harga aset</option><option>USD</option><option>IDR</option><option>EUR</option><option>USDT</option><option>JPY</option><option>GBP</option><option>SGD</option></select></label>
+          <button type="submit" class="mini-btn">Simpan posisi</button>
+          <span class="meta" id="pfMsg" role="status"></span>
+        </form>
+        <div class="table-wrap" id="pfBody"></div>
+        <div id="pfExcluded"></div>
+        <div class="pf-grid">
+          <div id="pfAlloc"></div>
+          <div id="pfRisk"></div>
+        </div>
+        <p class="hint">Posisi disimpan di browser ini (localStorage <code>qt.portfolio</code>), tidak dikirim ke mana pun. Harga dari sumber masing-masing aset; konversi ke mata uang dasar memakai kurs nyata dengan sumber dan waktunya. Bila kurs tidak tersedia, posisi itu tidak dijumlahkan (tidak dianggap 1:1). Bukan nasihat investasi.</p>
+      </div>
+    </section>
+  </section>
