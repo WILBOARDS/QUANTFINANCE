@@ -231,7 +231,10 @@ const App = (() => {
     $$('.side-nav button[data-page]').forEach(b => { if (b.dataset.page === p) { b.setAttribute('aria-current', 'page'); b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else b.removeAttribute('aria-current'); });
     if (p === 'market') requestAnimationFrame(() => { MapView.resize(); if (marketGlobe) marketGlobe.resize(); });
     if (p === 'cash') Cash.render();
+    /* waktu gambar awal halaman (bagian sinkron), terlihat di Sumber data -> Kinerja */
+    const t0 = performance.now();
     if (PAGES[p]) PAGES[p].show();
+    try { performance.measure('qt:halaman:' + p, { start: t0, end: performance.now() }); } catch { /* browser lama */ }
     Store.set('page', p);
     if (location.hash !== '#' + p) history.replaceState(null, '', '#' + p);
     window.scrollTo(0, 0);

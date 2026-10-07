@@ -85,7 +85,24 @@ const SourcesPage = (() => {
     $('#errLog').innerHTML = L.length ? `<table class="dense"><thead><tr><th>Waktu</th><th>Jenis</th><th class="num">Kali</th><th>Pesan</th></tr></thead><tbody>${L.map(e => `<tr><td class="num">${esc(fmtTime(e.lastAt))}</td><td>${esc(ErrorLog.KINDS[e.kind] || e.kind)}</td><td class="num">${e.count}</td><td class="wrap">${esc(e.message)}${e.detail ? `<span class="sub">${esc(e.detail.split('\n')[0])}</span>` : ''}</td></tr>`).join('')}</tbody></table>`
       : '<p class="hint" style="padding:12px 14px">Tidak ada error tercatat sejak halaman dibuka.</p>';
   }
-  function render() { serverBox(); providers(); health(); errLog(); }
+  /* kinerja: waktu muat (Navigation Timing), inisialisasi, gambar awal tiap halaman, globe per frame */
+  function perf() {
+    const nav = performance.getEntriesByType('navigation')[0];
+    const ms = v => (Number.isFinite(v) ? fmt(v, 0) + ' ms' : '–');
+    const rows = [];
+    if (nav) rows.push(['Muat dokumen (DOMContentLoaded)', ms(nav.domContentLoadedEventEnd), 'Navigation Timing API'], ['Muat penuh (load)', ms(nav.loadEventEnd || NaN), 'Navigation Timing API']);
+    const m = performance.getEntriesByType('measure').filter(e => e.name.startsWith('qt:'));
+    const init = m.find(e => e.name === 'qt:init');
+    if (init) rows.push(['Inisialisasi aplikasi', ms(init.duration), 'performance.measure']);
+    const last = {};
+    for (const e of m) if (e.name.startsWith('qt:halaman:')) last[e.name.slice(11)] = e.duration;
+    for (const [p, d] of Object.entries(last)) rows.push(['Gambar awal halaman ' + p + ' (terakhir)', ms(d), 'bagian sinkron show()']);
+    const globes = [['Globe Intel', typeof IntelPage !== 'undefined' && IntelPage.globe]];
+    for (const [k, g] of globes) if (g && g.lastDrawMs) rows.push([k + ': gambar 1 frame (terakhir)', fmt(g.lastDrawMs, 1) + ' ms', 'diukur di loop gambar']);
+    if (performance.memory) rows.push(['Memori JS terpakai', fmt(performance.memory.usedJSHeapSize / 1048576, 1) + ' MB', 'performance.memory (Chromium)']);
+    $('#perfBody').innerHTML = `<table class="dense static"><thead><tr><th>Ukuran</th><th class="num">Nilai</th><th>Cara ukur</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r[0])}</td><td class="num">${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table><p class="hint" style="padding:6px 14px 10px">Angka bergantung pada perangkat dan browser. Halaman yang memuat data dari internet (negara, berita) selesai belakangan; yang diukur di sini hanya gambar awalnya.</p>`;
+  }
+  function render() { serverBox(); providers(); health(); errLog(); perf(); }
   return {
     async show() {
       await Net.ready();
@@ -97,6 +114,7 @@ const SourcesPage = (() => {
         bus.on('sources', () => { if (!$('#page-sources').hidden) { clearTimeout(tmr); tmr = setTimeout(() => { providers(); health(); }, 400); } });
         bus.on('errorlog', () => { if (!$('#page-sources').hidden) { clearTimeout(tmr2); tmr2 = setTimeout(errLog, 300); } });
         $('#errLogClear').addEventListener('click', () => { ErrorLog.clear(); errLog(); });
+        $('#perfRefresh').addEventListener('click', perf);
         $('#errLogExport').addEventListener('click', () => download('log-error.json', JSON.stringify({ exportedAt: new Date().toISOString(), entries: ErrorLog.list() }, null, 2), 'application/json'));
       }
       await refreshServer();
