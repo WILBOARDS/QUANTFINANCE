@@ -110,9 +110,9 @@ const MacroPage = (() => {
         return `<tr><td>${p.label}</td><td class="num">${fredLin(p.id, 'Imbal hasil ' + p.label, fmt(p.now.value, 2), '%', p.now.date)}</td><td class="num ${sign(ch)}">${ch === null ? '–' : (ch > 0 ? '+' : '') + fmt(ch, 0) + ' bp'}</td><td class="num ${sign(cm)}">${cm === null ? '–' : (cm > 0 ? '+' : '') + fmt(cm, 0) + ' bp'}</td><td class="num">${fmt(dc.mod, 2)}</td><td class="num">${fmt(dc.conv, 1)}</td></tr>`; }).join('')}
       </tbody></table>
       <dl class="kv three">
-        <div><dt>10Y − 2Y</dt><dd class="${sign(s2s10 && s2s10.value)}">${s2s10 ? fredLin('T10Y2Y', 'Spread 10Y-2Y', fmt(s2s10.value, 2), '%', s2s10.date) : '–'}</dd><small>${s2s10 && s2s10.value < 0 ? 'terbalik (sering mendahului resesi)' : 'positif'}</small></div>
+        <div><dt>10Y − 2Y</dt><dd class="${sign(s2s10 && s2s10.value)}">${s2s10 ? fredLin('T10Y2Y', 'Spread 10Y-2Y', fmt(s2s10.value, 2), '%', s2s10.date) : '–'} <small>${s2s10 && s2s10.value < 0 ? 'terbalik (sering mendahului resesi)' : 'positif'}</small></dd></div>
         <div><dt>10Y − 3M</dt><dd>${s3m10 ? fredLin('T10Y3M', 'Spread 10Y-3M', fmt(s3m10.value, 2), '%', s3m10.date) : '–'}</dd></div>
-        <div><dt>30Y − 10Y</dt><dd>${s10s30 === null ? '–' : fmt(s10s30, 2)}</dd><small>kalkulasi</small></div>
+        <div><dt>30Y − 10Y</dt><dd>${s10s30 === null ? '–' : fmt(s10s30, 2)} <small>kalkulasi</small></dd></div>
         <div><dt>Riil 10Y (TIPS)</dt><dd>${real ? fredLin('DFII10', 'Imbal hasil riil 10Y', fmt(real.value, 2), '%', real.date) : '–'}</dd></div>
         <div><dt>Breakeven 5Y</dt><dd>${be ? fredLin('T5YIE', 'Ekspektasi inflasi 5Y', fmt(be.value, 2), '%', be.date) : '–'}</dd></div>
       </dl>
@@ -223,7 +223,7 @@ const MacroPage = (() => {
       const v = aligned.cols[k].slice(-n);
       rets[k] = series[k].mode === 'diff' ? v.slice(1).map((x, i) => x - v[i]) : Analytics.returns(v);
     }
-    const cell = v => `<td class="num"><span class="heat" style="background:${Number.isFinite(v) ? (v >= 0 ? `rgb(52 209 164 / ${Math.abs(v) * 0.6})` : `rgb(255 111 97 / ${Math.abs(v) * 0.6})`) : 'transparent'}">${Number.isFinite(v) ? fmt(v, 2) : '–'}</span></td>`;
+    const cell = v => `<td class="num"><span class="heat" style="background:${Number.isFinite(v) ? (v >= 0 ? `rgb(52 209 164 / ${Math.abs(v) * 0.4})` : `rgb(255 111 97 / ${Math.abs(v) * 0.4})`) : 'transparent'}">${Number.isFinite(v) ? fmt(v, 2) : '–'}</span></td>`;
     $('#corrBody').innerHTML = `<div class="table-wrap"><table class="dense static"><thead><tr><th></th>${keys.map(k => `<th class="num">${esc(k)}</th>`).join('')}</tr></thead><tbody>
       ${keys.map(a => `<tr><td>${esc(a)}</td>${keys.map(b => cell(a === b ? 1 : Analytics.correlation(rets[a], rets[b]))).join('')}</tr>`).join('')}</tbody></table></div>
       <p class="hint">${qBadge('calculated')} Korelasi Pearson dari ${n - 1} pengamatan harian yang tanggalnya sama (s.d. ${esc(aligned.dates[aligned.dates.length - 1])}). Harga memakai return harian; US10Y dan VIX memakai perubahan harian. Korelasi berubah-ubah dan bukan sebab-akibat.</p>`;

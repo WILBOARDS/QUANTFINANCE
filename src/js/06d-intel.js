@@ -180,7 +180,7 @@ const IntelPage = (() => {
       const sc = CountryData.score(c.iso3);
       badge.innerHTML = `<span class="iso" style="font-family:var(--font-num);color:var(--brass)">${esc(c.iso3)}</span>`;
       el.innerHTML = `<p class="lead">${esc(c.en)} · ${esc(c.sub || c.region)} · ibu kota ${esc(c.capital || '–')} · ${esc(c.cur || '')}</p>
-        <dl class="kv">${['growth', 'infl', 'unemp', 'debt', 'ca', 'gdp'].map(k => { const ind = MACRO.find(m => m.key === k); return `<div><dt>${esc(ind.label)}</dt><dd>${macroCell(c.iso3, ind, { year: true })}</dd><small>${esc(ind.unit)}</small></div>`; }).join('')}
+        <dl class="kv">${['growth', 'infl', 'unemp', 'debt', 'ca', 'gdp'].map(k => { const ind = MACRO.find(m => m.key === k); return `<div><dt>${esc(ind.label)}</dt><dd>${macroCell(c.iso3, ind, { year: true })} <small>${esc(ind.unit)}</small></dd></div>`; }).join('')}
           <div><dt>Skor negara ${qBadge('calculated')}</dt><dd>${sc.total ?? '–'}<small> /100</small></dd></div>
           <div><dt>Stabilitas politik</dt><dd>${macroCell(c.iso3, WB_BULK[1], { year: true })}</dd></div></dl>
         <div class="pillset"><button type="button" class="btn" data-go="country">Buka intelijen negara</button><button type="button" class="mini-btn" data-go="news">Berita dan spekulasi</button></div>

@@ -52,8 +52,9 @@ export async function createHarness() {
     return srvBase;
   }
 
-  async function page(vp, mode) {
-    const ctx = await browser.newContext({ viewport: vp, reducedMotion: 'no-preference' });
+  /* bypassCSP hanya untuk alat uji yang harus menyuntik skrip (mis. axe-core); aplikasi tetap diuji dengan CSP aslinya di skenario lain */
+  async function page(vp, mode, bypassCSP) {
+    const ctx = await browser.newContext({ viewport: vp, reducedMotion: 'no-preference', ...(bypassCSP ? { bypassCSP: true } : {}) });
     await ctx.addInitScript(INIT);
     const p = await ctx.newPage();
     p.errs = [];
@@ -90,7 +91,7 @@ export async function createHarness() {
   async function scenario(name, fn, opts = {}) {
     const mode = opts.mode || 'mock';
     if (mode === 'server') await startServer();
-    const p = await page(opts.vp || DESKTOP, mode);
+    const p = await page(opts.vp || DESKTOP, mode, !!opts.bypassCSP);
     const t0 = Date.now();
     try {
       const note = await fn(p, { base: mode === 'server' ? srvBase : FILE, mode });

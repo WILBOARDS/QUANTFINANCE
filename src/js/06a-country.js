@@ -286,7 +286,7 @@ const CountryPage = (() => {
   /* ---------------- detail ---------------- */
   function kpi(iso3, key) {
     const ind = MACRO.find(m => m.key === key) || WB_BULK.find(m => m.key === key);
-    return `<div><dt>${esc(ind.label)}</dt><dd>${macroCell(iso3, ind, { year: true })}</dd><small>${esc(ind.unit)}</small></div>`;
+    return `<div><dt>${esc(ind.label)}</dt><dd>${macroCell(iso3, ind, { year: true })} <small>${esc(ind.unit)}</small></dd></div>`;
   }
   function lineChart(series, opts = {}) {
     /* series: [{name, color, pts:[{x(year), y, proj}]}] */
@@ -387,9 +387,9 @@ const CountryPage = (() => {
     const cells = WB_DETAIL.map(([code, label, unit]) => {
       const arr = (by[code] || []).sort((a, b) => b.year - a.year);
       const x = arr[0];
-      if (!x) return `<div><dt>${esc(label)}</dt><dd class="na">–</dd><small>${esc(unit)}</small></div>`;
+      if (!x) return `<div><dt>${esc(label)}</dt><dd class="na">– <small>${esc(unit)}</small></dd></div>`;
       const v = unit === 'USD' ? fmtCompact(x.value) : unit.startsWith('LCU') ? fmt(x.value, x.value > 100 ? 0 : 2) : fmt(x.value, 1);
-      return `<div><dt>${esc(label)}</dt><dd>${Lineage.wrap({ label: label + ' (' + c.name + ')', value: v, unit, quality: r.stale ? 'stale' : 'historical', source: 'World Bank WDI · ' + code, home: 'https://data.worldbank.org/indicator/' + code, url: r.sourceUrl, asOf: 'tahun ' + x.year, fetchedAt: r.fetchedAt, via: r.via, raw: x.value }, esc(v))} <small>${x.year}</small></dd><small>${esc(unit)}</small></div>`;
+      return `<div><dt>${esc(label)}</dt><dd>${Lineage.wrap({ label: label + ' (' + c.name + ')', value: v, unit, quality: r.stale ? 'stale' : 'historical', source: 'World Bank WDI · ' + code, home: 'https://data.worldbank.org/indicator/' + code, url: r.sourceUrl, asOf: 'tahun ' + x.year, fetchedAt: r.fetchedAt, via: r.via, raw: x.value }, esc(v))} <small>${x.year}</small> <small>${esc(unit)}</small></dd></div>`;
     }).join('');
     const ex = by['TX.VAL.FUEL.ZS.UN']?.[0], mm = by['TX.VAL.MMTL.ZS.UN']?.[0], fd = by['TX.VAL.FOOD.ZS.UN']?.[0], ei = by['EG.IMP.CONS.ZS']?.[0];
     const notes = [];

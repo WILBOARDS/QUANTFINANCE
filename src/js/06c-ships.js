@@ -183,7 +183,7 @@ const ShipsPage = (() => {
       return `<svg class="spark" viewBox="0 0 62 24" preserveAspectRatio="none" aria-hidden="true" style="color:${k.chg < -0.1 ? 'var(--down)' : 'var(--ink-2)'}"><path d="${s.map((v, i) => (i ? 'L' : 'M') + (i / (s.length - 1) * 62).toFixed(1) + ' ' + (22 - (v - lo) / sp * 20).toFixed(1)).join(' ')}"/></svg>`;
     };
     $('#chokeWrap').innerHTML = `<table class="dense"><thead><tr><th>Chokepoint</th><th class="num">Hari terakhir</th><th class="num">Rata 7h</th><th class="num">vs 1 thn</th><th class="num">Tanker 7h</th><th class="num">Kontainer 7h</th><th>90 hari</th><th>Data s.d.</th></tr></thead><tbody>` +
-      list.map(k => `<tr data-choke="${esc(k.name)}" tabindex="0" aria-selected="${S.sel && S.sel.type === 'chokepoint' && S.sel.item.name === k.name}"><td>${esc(k.name)}</td><td class="num">${fmt(k.last, 0)}</td><td class="num">${fmt(k.avg7, 1)}</td>
+      list.map(k => `<tr data-choke="${esc(k.name)}" tabindex="0" aria-selected="${!!(S.sel && S.sel.type === 'chokepoint' && S.sel.item.name === k.name)}"><td>${esc(k.name)}</td><td class="num">${fmt(k.last, 0)}</td><td class="num">${fmt(k.avg7, 1)}</td>
         <td class="num ${sign(k.chg)}">${Number.isFinite(k.chg) ? fmtPct(k.chg, 1) : '–'}</td><td class="num">${fmt(k.tanker7, 1)}</td><td class="num">${fmt(k.container7, 1)}</td><td>${spark(k)}</td><td class="num">${esc(k.lastDate)}</td></tr>`).join('') +
       `</tbody></table>` + `<div class="src-foot">${srcLine(r, 'jeda ±4 hari; vs 1 thn = rata 7 hari ÷ rata setahun sebelumnya − 1')}</div>`;
   }
@@ -222,7 +222,7 @@ const ShipsPage = (() => {
     list = [...list].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 400);
     $('#vesselWrap').innerHTML = !S.vessels.length ? '<p class="hint" style="padding:12px 14px">Belum ada posisi kapal diterima. AISStream baru mengirim data setelah ada kapal di kotak pantau; tunggu 1–2 menit.</p>' :
       `<table class="dense"><thead><tr><th>Kapal</th><th>Tipe</th><th class="num">Knot</th><th class="num">Arah</th><th>Tujuan</th><th class="num">Posisi</th><th>Update</th><th>Sumber</th></tr></thead><tbody>` +
-      list.map(v => `<tr data-mmsi="${v.mmsi}" tabindex="0" aria-selected="${S.sel && S.sel.type === 'ship' && S.sel.item.mmsi === v.mmsi}"><td>${esc(v.name || '–')}<span class="sub">MMSI ${v.mmsi}</span></td><td><span style="color:${SHIP_COLORS[v.cls]}">●</span> ${esc(SHIP_LABELS[v.cls] || v.cls)}</td>
+      list.map(v => `<tr data-mmsi="${v.mmsi}" tabindex="0" aria-selected="${!!(S.sel && S.sel.type === 'ship' && S.sel.item.mmsi === v.mmsi)}"><td>${esc(v.name || '–')}<span class="sub">MMSI ${v.mmsi}</span></td><td><span style="color:${SHIP_COLORS[v.cls]}">●</span> ${esc(SHIP_LABELS[v.cls] || v.cls)}</td>
         <td class="num">${v.sog !== null && v.sog !== undefined ? fmt(v.sog, 1) : '–'}</td><td class="num">${v.cog !== null && v.cog !== undefined ? fmt(v.cog, 0) + '°' : '–'}</td><td>${esc((v.dest || '').slice(0, 20))}</td>
         <td class="num">${fmt(v.lat, 2)}, ${fmt(v.lon, 2)}</td><td>${esc(fmtAge(v.ts))}</td><td>${esc(v.src || '')}</td></tr>`).join('') +
       `</tbody></table><div class="src-foot">${total > 400 ? `Menampilkan 400 terbaru dari ${fmt(total, 0)} kapal yang cocok.` : `${fmt(total, 0)} kapal.`} Posisi asli dari transponder AIS.</div>`;
