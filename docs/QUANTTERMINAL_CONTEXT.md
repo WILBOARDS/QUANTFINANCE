@@ -54,8 +54,17 @@ Dikerjakan sesuai prompt "Bloomberg-like" pemilik, urut prioritas. **Fase 0 (per
 - Watchlist banyak daftar, alert (harga/perubahan/volume vs rata-rata) dengan data nyata.
 - Lapisan data: coba ulang + backoff eksponensial, stale-while-revalidate, cache negatif, tidak mengakali rate limit server lewat jalur langsung, log error internal.
 
-### Belum dikerjakan (Prioritas 3–7, urutan berikutnya)
-Grafik pro dengan indikator (SMA/EMA/RSI/MACD/Bollinger/VWAP/ATR), fundamental lengkap 12 tab dari SEC EDGAR + Piotroski/Altman nyata dengan "Lihat perhitungan", screener, halaman Rates/FX/Komoditas khusus, People/perusahaan dari Wikidata, kripto lanjutan (trades, funding/OI), heatmap, portofolio + risiko. Arsitekturnya sudah siap: tab baru cukup `SecurityTabs.register(...)`, indikator `ProChart.register(...)`, halaman baru `src/pages/*.html` + `App.registerPage(...)`.
+### Prioritas 3–7 (selesai di v2.1)
+- **Grafik + teknikal** (`shared/indicators.mjs`, `10a-studies.js`): SMA20/50, EMA20, Bollinger(20,2), VWAP, RSI14, MACD(12,26,9), ATR14, rata-rata volume; pita indikator di bawah grafik; bandingkan ≤ 4 aset (awal = 100); tab TECH. Data kurang/hanya-penutupan (FRED) ditulis alasannya, tidak digambar.
+- **Fundamental SEC EDGAR** (`server/routes/sec.mjs`, `shared/fundamentals.mjs`, `11a`): 12 sub-tab, Piotroski 9 kriteria dan Altman Z''/Z dengan "Lihat perhitungan"; kriteria yang inputnya tidak dilaporkan = "Data kurang", skor tidak dinormalisasi; Altman tidak berlaku untuk SIC 6000–6999. Butuh `SEC_USER_AGENT` di `.env`. Saham non-AS: dijelaskan tidak tersedia dari sumber resmi gratis.
+- **Screener** (`shared/screener.mjs`, `11b`): SEC frames untuk semua pelapor bertiker; 7 preset; VALUE/MOMENTUM hanya untuk aset katalog yang punya harga (cakupan ditulis). Maksimal 200 baris tampil, sisanya di CSV (ditulis).
+- **Berita + pasar** (`shared/newsrank.mjs`, `06b`, `12a`): `N <teks>` = kueri GDELT baru; Breaking/Terbaru/Paling relevan; saringan tema/negara/domain/spekulatif; judul serupa digabung (yang paling awal tampil, sumber lain didaftar). Halaman Suku bunga (kurva, BIS, OECD 10Y; perubahan dalam bp), Valas (kurs referensi harian, bukan Live), Komoditas. Makro: survei Fed regional (Philadelphia, Empire State) berlabel **bukan PMI**; breadth Belum tersedia; rezim/analog Eksperimental.
+- **Kripto + heatmap** (`server/routes/crypto-x.mjs`, `shared/cryptox.mjs`, `13a`, `13b`): Transaksi (aggTrades, transaksi besar dengan ambang, sisi taker), Derivatif (funding, OI Binance USD-M), On-chain BTC (mempool.space; koin lain Belum tersedia). Heatmap squarified: ukuran = kapitalisasi nyata, aset tanpa kapitalisasi didaftar terpisah; maks 30 saham per peta (kuota Finnhub). **Tidak ada lapisan "whale" di globe**: tidak ada dasar data lokasi pemilik dompet.
+- **Tokoh + negara** (`server/routes/wikidata.mjs`, `shared/wikidata.mjs`, `14a`, `14b`): fakta Wikidata dengan item + properti + kualifier; ALLOW/BLOCK data pribadi diuji. Tab Pasar di halaman Negara.
+- **Portofolio** (`shared/portfolio.mjs`, `15a`): kurs nyata (USDT lewat tether CoinGecko), tidak pernah 1:1; risiko hanya bila ≥ 60 imbal hasil harian selaras; metodologi tertulis.
+
+### Batas yang sengaja tidak dikerjakan (tidak ada sumber gratis/legal yang andal)
+ISM/S&P Global PMI, breadth pasar, konsensus ekonom, kepemilikan 13F per perusahaan, likuidasi kripto, aliran dana on-chain/label dompet, fundamental resmi non-AS (IDX dsb.), kapitalisasi pasar saham non-AS (Finnhub gratis hanya AS), peringkat kredit negara.
 
 ### Tetap belum terverifikasi
 Sama seperti v2: tidak ada API sungguhan yang bisa diakses dari sandbox; semua tes memakai sumber palsu berformat asli. Lihat bagian 3 di bawah.

@@ -27,6 +27,7 @@ Ada dua cara. Cara A paling mudah, cara B membuka semua fitur.
    - `AISSTREAM_API_KEY` : kapal live global, gratis di https://aisstream.io (login pakai GitHub)
    - `FINNHUB_API_KEY` : harga saham AS, fundamental, insider, earnings, gratis di https://finnhub.io/register
    - `FRED_API_KEY` : opsional. Tanpa kunci pun FRED tetap jalan lewat CSV publik.
+   - `SEC_USER_AGENT` : wajib untuk fundamental AS & Screener (SEC EDGAR, gratis tanpa kunci). Isi nama dan email aslimu, contoh bentuk `SEC_USER_AGENT="Nama Kamu emailkamu@domain"`. SEC mewajibkan ini; nilainya hanya dikirim server ke SEC, tidak ke browser.
 5. Jalankan `npm start`, lalu buka **http://localhost:8787**.
 6. Cek halaman **Sumber data**: setiap penyedia harus "Tersambung". Kalau "Gagal", pesan errornya ada di kolom terakhir.
 
@@ -47,6 +48,14 @@ File `.env` tidak boleh di-commit (sudah di `.gitignore`). Kunci hanya dibaca se
 | Detail aset | Satu halaman untuk saham, ETF, indeks, kripto, valas, komoditas, suku bunga: harga + metadata data (sumber, waktu data, waktu ambil, kualitas, basi), tab Ringkasan/Grafik/Profil/Fundamental/Earnings/Insider/Order book/Berita, mode bandingkan (kinerja dinormalisasi) | Finnhub, Binance, CoinGecko, FRED, ExchangeRate-API/Frankfurter, Wikipedia, GDELT, Yahoo (opsional) | sesuai sumber, selalu tertulis |
 | Watchlist | Banyak daftar: buat, ganti nama, hapus, tambah, urutkan; disimpan di browser; harga + umur data per baris; ekspor CSV | sama dengan detail aset | sesuai sumber |
 | Alert | Harga, perubahan %, volume vs rata-rata (`ALERT AAPL VOLUME > AVG*2`); dicek tiap 30 detik dengan data nyata; notifikasi browser bila diizinkan | sama dengan detail aset | tidak memicu bila data tidak tersedia/basi |
+| Grafik pro + Teknikal | 9 timeframe; SMA20/50, EMA20, Bollinger, VWAP, RSI14, MACD, ATR14, rata-rata volume (catatan periode/sumber/basis tiap indikator); bandingkan sampai 4 aset (awal = 100); tab TECH: nilai terakhir + bacaan berbasis aturan | riwayat yang sama dengan grafik | Kalkulasi; data kurang/hanya-penutupan ditulis alasannya |
+| Fundamental (saham AS) | 12 sub-tab: Ringkasan, Laba rugi, Neraca, Arus kas, Rasio, Pertumbuhan, Valuasi, Kualitas (Piotroski + Altman, "Lihat perhitungan"), Earnings, Dividen, Kepemilikan, Insider (Form 4) | SEC EDGAR (XBRL companyfacts, submissions); estimasi Finnhub bila ada kunci | Historis / Kalkulasi; "Data kurang" tanpa normalisasi |
+| Screener | Preset Value, Growth, Quality, Dividend, Momentum, Low leverage, Financial health (subset Piotroski); filter min/maks, urut, CSV | SEC EDGAR frames (semua pelapor bertiker); harga hanya untuk aset katalog | Hasil filter kuantitatif, bukan rekomendasi |
+| Suku bunga · Valas · Komoditas | Tabel semua entitas + grafik baris terpilih; kurva Treasury, suku bunga kebijakan; perubahan bunga dalam bp | FRED, OECD (via FRED), BIS, ExchangeRate-API/Frankfurter, Yahoo (opsional) | Harian / Historis; emas/perak tanpa Yahoo = Tidak tersedia |
+| Heatmap | Treemap: ukuran = kapitalisasi pasar nyata, warna = perubahan %; Global/AS/Eropa/Asia/Indonesia/Kripto | CoinGecko, Finnhub profile2 + sumber harga | aset tanpa kapitalisasi didaftar terpisah |
+| Kripto (detail aset) | Transaksi terbaru + transaksi besar (ambang bisa diubah), derivatif (funding, open interest), on-chain BTC | Binance spot, Binance USD-M futures, mempool.space | Live; turunan = Kalkulasi; bukan klaim "whale" |
+| Tokoh | Peran publik tokoh dan orang kunci perusahaan dengan item + properti Wikidata; ringkasan Wikipedia | Wikidata (CC0), Wikipedia (CC BY-SA) | tanpa data pribadi (diuji) |
+| Portofolio | Posisi (disimpan di browser), nilai + L/R dalam USD/IDR dengan kurs nyata, alokasi, volatilitas, drawdown, VaR/ES historis, beta, korelasi; impor/ekspor CSV | Quotes (sama dengan detail aset), kurs valas | Kalkulasi; risiko hanya bila riwayat ≥ 60 hari |
 
 **Bilah perintah** ada di header (tekan **Ctrl+K** atau **/**). Bentuknya `<KODE> <VERB>` atau perintah global, dengan saran otomatis dan riwayat (panah atas):
 
@@ -56,9 +65,10 @@ File `.env` tidak boleh di-commit (sudah di `.gitignore`). Kunci hanya dibaca se
 | `AAPL COMPARE MSFT NVDA` · `COMPARE ID US CN` | bandingkan aset (kinerja dinormalisasi) atau negara |
 | `ID ECON` · `US ECON` · `MA ECON` (Maroko, bukan Mastercard) | intelijen negara |
 | `US10Y` · `EURUSD` · `GOLD` · `BTC GP` · `BTC DEPTH` | kuotasi/grafik/order book |
-| `NVIDIA PEOPLE` · `PEOPLE Jensen Huang` | tokoh publik (Wikipedia) |
+| `NVDA PEOPLE` · `PEOPLE Jensen Huang` | tokoh publik dan orang kunci perusahaan (Wikidata + Wikipedia) |
+| `SCREEN GROWTH` · `HEAT CRYPTO` · `HEAT US` · `PORT` · `BTC TECH` | screener, heatmap, portofolio, indikator teknikal |
 | `WATCH AAPL BTC` · `ALERT AAPL > 300` · `ALERT BTC CHG < -5` | watchlist dan alert |
-| `HELP` · `HOME` · `CLEAR` · `RATES` · `CMDTY` · `SHIP HORMUZ` · `N RUPIAH` | bantuan, navigasi, berita teks bebas |
+| `HELP` · `HOME` · `CLEAR` · `RATES` · `FX` · `CMDTY` · `SHIP HORMUZ` · `N RUPIAH` | bantuan, navigasi, kueri berita GDELT bebas |
 
 Parser perintahnya murni (`shared/commands.mjs`) dan setiap perintah punya tes di `test/commands.test.mjs`.
 
@@ -98,6 +108,15 @@ src/js/08d-alerts.js     alert + halamannya
 src/js/08e-panels.js     panel ruang kerja (perkecil/perbesar/tutup), HELP, aksesibilitas keyboard
 src/js/09a-prochart.js   grafik yang bisa dipakai ulang (9 timeframe, candle/garis/area, volume, zoom)
 src/js/09b-security.js   halaman detail aset + registri tab
+src/js/10a-studies.js    indikator grafik + tab Teknikal (TECH)
+src/js/11a-fundamentals.js  fundamental SEC EDGAR (FA/EST/DIV/OWN/INSIDER)
+src/js/11b-screener.js   screener (SCREEN)
+src/js/12a-markets.js    halaman Suku bunga, Valas, Komoditas
+src/js/13a-crypto.js     tab kripto Transaksi, Derivatif, On-chain
+src/js/13b-heatmap.js    heatmap (HEAT)
+src/js/14a-people.js     tokoh & perusahaan (Wikidata)
+src/js/14b-country-x.js  tab Pasar di halaman Negara
+src/js/15a-portfolio.js  portofolio + risiko (PORT)
 src/js/99-start.js       mendaftarkan halaman baru lalu menjalankan aplikasi
 shared/parsers.mjs       parser respons API (dipakai browser DAN server, diuji)
 shared/analytics.mjs     tema berita, spekulasi, skor dampak, skor negara, risiko, korelasi, rezim, uji tekanan (diuji)
@@ -105,6 +124,13 @@ shared/entities.mjs      registri entitas + mesin pencarian (diuji)
 shared/entity-seed.mjs   katalog referensi: kode, nama, pemetaan sumber; TANPA angka pasar (diuji)
 shared/commands.mjs      parser perintah + autocomplete (diuji)
 shared/csv.mjs           ekspor CSV aman dari injeksi rumus spreadsheet (diuji)
+shared/indicators.mjs    SMA, EMA, RSI, MACD, Bollinger, VWAP, ATR (diuji dengan angka hitung tangan)
+shared/fundamentals.mjs  ringkasan XBRL, rasio, pertumbuhan, valuasi, Piotroski, Altman (diuji)
+shared/screener.mjs      frames SEC -> metrik -> preset filter (diuji)
+shared/newsrank.mjs      penggabungan judul serupa, breaking, urutan, saringan, kueri GDELT aman (diuji)
+shared/cryptox.mjs       transaksi besar, arus taker, funding, OI, mempool, treemap (diuji)
+shared/wikidata.mjs      parser Wikidata + daftar properti terlarang (data pribadi) (diuji)
+shared/portfolio.mjs     CSV aman, valuasi, imbal hasil, volatilitas, drawdown, VaR/ES, beta, korelasi (diuji)
 server/server.mjs        server Node tanpa library: proxy, cache, rate limit, backoff per host, CORS, CSP berbasis hash, cek Host
 server/lib/core.mjs      .env, cache memori+disk, antrean, ember token
 server/lib/ais.mjs       pengumpul AIS (AISStream WebSocket + Digitraffic)
@@ -123,6 +149,7 @@ npm test             # unit test parser, kalkulasi, pemindai rahasia
 npm run e2e:install  # SEKALI saja: unduh Chromium yang cocok untuk tes E2E
 npm run e2e          # build + skenario browser (atau set CHROME_PATH ke chrome.exe/msedge.exe)
 npm run e2e -- B4    # hanya skenario yang namanya mengandung "B4"
+npm run e2e -- E7,H  # beberapa sekaligus: E7 dan semua H (ID diawali huruf itu)
 npm run secrets      # cari API key bocor di file terlacak, dist, dan seluruh riwayat git
 npm run a11y         # cek aksesibilitas otomatis (axe-core, WCAG A/AA) di semua halaman
 ```
@@ -135,4 +162,4 @@ Tes e2e memakai **sumber palsu** (`qa/fake-upstream.mjs`) yang meniru format API
 
 ## Lisensi data dan atribusi
 
-Peta: Natural Earth (domain publik). Globe: d3-geo (ISC). Metadata negara: world-countries (ODbL), i18n-iso-countries (MIT). Grafik: TradingView Lightweight Charts (Apache-2.0). Kurs: "Rates By Exchange Rate API". Data kapal Baltik © Fintraffic / digitraffic.fi, CC BY 4.0. Profil tokoh: Wikipedia (CC BY-SA). Berita: GDELT Project (hanya judul, sumber, waktu, tautan). Banyak paket API gratis hanya untuk pemakaian pribadi; baca ketentuannya sebelum mempublikasikan aplikasi untuk umum.
+Peta: Natural Earth (domain publik). Globe: d3-geo (ISC). Metadata negara: world-countries (ODbL), i18n-iso-countries (MIT). Grafik: TradingView Lightweight Charts (Apache-2.0). Kurs: "Rates By Exchange Rate API". Data kapal Baltik © Fintraffic / digitraffic.fi, CC BY 4.0. Profil tokoh: Wikipedia (CC BY-SA) dan Wikidata (CC0). Fundamental: SEC EDGAR (data publik pemerintah AS). On-chain: mempool.space. Berita: GDELT Project (hanya judul, sumber, waktu, tautan). Banyak paket API gratis hanya untuk pemakaian pribadi; baca ketentuannya sebelum mempublikasikan aplikasi untuk umum.
