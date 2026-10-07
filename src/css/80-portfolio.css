@@ -1,0 +1,23 @@
+/* =====================================================================
+   PORTOFOLIO
+   ===================================================================== */
+@layer pages {
+  .pf-in { padding: 8px 14px 12px; display: grid; gap: 8px; min-inline-size: 0; }
+  .pf-form { display: flex; flex-wrap: wrap; align-items: end; gap: 6px 10px; font-size: 11.5px; color: var(--ink-2); }
+  .pf-form label { display: grid; gap: 2px; }
+  .pf-form input, .pf-form select { min-block-size: 30px; inline-size: 150px; font-family: var(--font-num); }
+  .pf-import { position: relative; cursor: pointer; display: inline-flex; align-items: center; }
+  .pf-import:focus-within { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .pf-tbl th[scope="row"] { text-align: start; font-weight: 500; }
+  .pf-tbl th[scope="row"] .sub, .pf-tbl td .sub { display: block; color: var(--ink-3); font-size: 10.5px; font-weight: 400; }
+  .pf-act { display: flex; gap: 4px; }
+  .pf-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; align-items: start; }
+  .pf-bars { display: grid; gap: 3px; margin-block-end: 8px; }
+  .pf-bar { display: grid; grid-template-columns: minmax(70px, 140px) minmax(0, 1fr) 52px; gap: 8px; align-items: center; font-size: 11.5px; }
+  .pf-bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+  .pf-bt { block-size: 8px; background: rgb(255 255 255 / 0.05); border-radius: 2px; overflow: hidden; }
+  .pf-bt i { display: block; block-size: 100%; background: var(--brass); }
+  .pf-bv { text-align: end; font-family: var(--font-num); }
+  .pf-in .na-box ul { margin: 4px 0 0; padding-inline-start: 18px; font-size: 12px; }
+  @media (max-width: 900px) { .pf-grid { grid-template-columns: minmax(0, 1fr); } }
+}

@@ -172,7 +172,7 @@ function bis() {
 }
 function coingecko(url) {
   if (url.pathname.includes('/ohlc')) { const r = rng(url.pathname); let c = 90000; return json(Array.from({ length: 120 }, (_, i) => { const o = c; c *= 1 + (r() - 0.48) * 0.03; return [now - (119 - i) * 4 * 3600e3, o, Math.max(o, c) * 1.01, Math.min(o, c) * 0.99, c]; })); }
-  return json([['bitcoin', 'btc', 97100], ['ethereum', 'eth', 3590], ['solana', 'sol', 194], ['binancecoin', 'bnb', 719]].map(([id, s, p], i) => ({ id, symbol: s, name: id, current_price: p, price_change_percentage_24h: 1.1 - i, market_cap: p * 1e7, fully_diluted_valuation: p * 1.1e7, total_volume: p * 1e5, high_24h: p * 1.01, low_24h: p * 0.98, market_cap_rank: i + 1, last_updated: new Date(now).toISOString() })));
+  return json([['bitcoin', 'btc', 97100], ['ethereum', 'eth', 3590], ['solana', 'sol', 194], ['binancecoin', 'bnb', 719], ['tether', 'usdt', 1.0003]].map(([id, s, p], i) => ({ id, symbol: s, name: id, current_price: p, price_change_percentage_24h: 1.1 - i, market_cap: p * 1e7, fully_diluted_valuation: p * 1.1e7, total_volume: p * 1e5, high_24h: p * 1.01, low_24h: p * 0.98, market_cap_rank: i + 1, last_updated: new Date(now).toISOString() })));
 }
 function finnhub(url) {
   const p = url.pathname, sym = url.searchParams.get('symbol') || 'AAPL';
