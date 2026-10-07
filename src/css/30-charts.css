@@ -1,0 +1,57 @@
+/* =====================================================================
+   GRAFIK PRO: indikator (pita bawah), mode bandingkan (normalisasi), tab Teknikal.
+   Di lapisan "pages" dan dimuat sesudah 20-terminal.css, jadi aturan .pc-* di sini menang.
+   Tetap: gelap, padat, tanpa gradien, tanpa ikon emoji.
+   ===================================================================== */
+@layer pages {
+  /* flex, bukan grid: baris chip bandingkan/catatan yang disembunyikan tidak menggeser tinggi grafik */
+  .pc-wrap { display: flex; flex-direction: column; gap: 6px; min-inline-size: 0; }
+  .pc-host { flex: 1 1 auto; min-block-size: 320px; }
+  /* akar Lightweight Charts dilepas dari alur tata letak: tinggi grafik ditentukan wadah, bukan isi kanvas.
+     Tanpa ini wadah tidak bisa mengecil lagi dan ResizeObserver berputar ("loop completed") saat pita berubah. */
+  .pc-host > .tv-lightweight-charts { position: absolute; inset: 0; }
+  .pc-wrap[data-panes="1"] .pc-host { min-block-size: 420px; }
+  .pc-wrap[data-panes="2"] .pc-host { min-block-size: 500px; }
+  .pc-wrap[data-panes="3"] .pc-host { min-block-size: 580px; }
+  /* label + garis pemisah pita indikator (di atas kanvas, tidak menangkap klik/seret) */
+  .pc-panes { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  .pc-band { position: absolute; inset-inline: 0; padding: 1px 6px; border-block-start: 1px dashed var(--line); color: var(--ink-3); font-size: 10.5px; line-height: 1.4; }
+
+  /* ---------- bandingkan ---------- */
+  .pc-cmp { display: inline-flex; align-items: center; gap: 4px; min-inline-size: 0; }
+  .pc-cmp .mini-input { inline-size: 160px; font-family: var(--font-num); }
+  .pc-cmp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 11.5px; }
+  .pc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 2px 1px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink-2); }
+  .pc-chip b { color: var(--ink); font-family: var(--font-num); font-weight: 600; }
+  .pc-chip .loading { padding: 0; font-size: 11px; }
+  .pc-x { display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 4px; color: var(--ink-3); font-size: 15px; line-height: 1; }
+  .pc-x:hover { color: var(--ink); background: rgb(255 255 255 / 0.06); }
+  .pc-axis { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+
+  /* ---------- legenda & catatan indikator ---------- */
+  .sw { display: inline-block; flex: none; inline-size: 12px; block-size: 3px; border-radius: 1px; vertical-align: middle; }
+  .pc-sv { display: inline-flex; align-items: center; gap: 4px; }
+  .pc-notes { display: grid; gap: 3px; padding-block-start: 6px; border-block-start: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink-2); }
+  .pc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; overflow-wrap: anywhere; min-inline-size: 0; }
+  .pc-note > b { color: var(--ink); }
+  .pc-note .pc-last { color: var(--ink); font-family: var(--font-num); }
+
+  /* ---------- tab Teknikal ---------- */
+  .tech-wrap { display: grid; gap: 8px; min-inline-size: 0; }
+  .tech-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .tech-body { display: grid; gap: 8px; min-inline-size: 0; }
+  .tech-scroll { overflow-x: auto; min-inline-size: 0; }
+  .tech-table th[scope="row"] { color: var(--ink); font-weight: 600; }
+  .tech-table tbody tr { cursor: default; }
+  .tech-table td.wrap { white-space: normal; min-inline-size: 200px; max-inline-size: 360px; }
+  .tech-table .tv { display: block; }
+  .tech-table .tv small { color: var(--ink-3); font-family: var(--font-ui); font-size: 10.5px; }
+  .tech-table .na-txt { color: var(--ink-3); }
+
+  @media (max-width: 760px) {
+    .pc-cmp { flex: 1 1 100%; }
+    .pc-cmp .mini-input { flex: 1 1 auto; inline-size: auto; }
+    .tech-table td.wrap { min-inline-size: 180px; }
+  }
+}
