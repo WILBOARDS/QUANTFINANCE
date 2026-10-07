@@ -56,9 +56,14 @@ export default async function (h) {
     await p.goto(base + '#macro'); await wait(12000);
     const reg = await p.textContent('#regimeBody');
     if (!/Risk|Netral|Transisi/.test(reg)) throw new Error('Rezim tidak dihitung');
-    const na = await p.$$eval('#page-macro .na-box strong', e => e.map(x => x.textContent));
+    const na = await p.$$eval('#page-macro .na-box:not(.na-design) strong', e => e.map(x => x.textContent));
     const cmdtyNa = await p.$$eval('#cmdtyBody td.c-na', e => e.length);
     if (na.length) throw new Error('Panel makro tidak tersedia di mode server: ' + JSON.stringify(na));
+    /* yang "tidak tersedia karena desain" hanya boleh daftar yang diketahui (tidak ada sumber gratis) */
+    const design = await p.$$eval('#page-macro .na-box.na-design strong', e => e.map(x => x.textContent));
+    const KNOWN = [/^Market breadth/];
+    const unknown = design.filter(t => !KNOWN.some(k => k.test(t)));
+    if (unknown.length) throw new Error('Kotak tidak-tersedia-karena-desain yang tidak dikenal: ' + JSON.stringify(unknown));
     const cb = await p.$$eval('#cbBody tbody tr', e => e.length);
     await shot(p, 'B6-makro', { fullPage: true });
     return { bankSentral: cb, komoditasKosong: cmdtyNa };

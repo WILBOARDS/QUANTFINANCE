@@ -107,6 +107,8 @@ export async function createHarness() {
       results.push(`FAIL ${name}: ${String(e.message).split('\n')[0].slice(0, 260)}${p.errs.length ? '\n      ' + p.errs.join('\n      ') : ''}`);
       try { await p.screenshot({ path: OUT + 'fail-' + name.replace(/\W+/g, '_') + '.png' }); } catch { /* abaikan */ }
     }
+    /* kemajuan langsung ke stderr (ringkasan lengkap tetap dicetak di akhir) */
+    process.stderr.write('  ' + results[results.length - 1].split('\n')[0].slice(0, 160) + '\n');
     await p.context().close();
   }
 

@@ -77,12 +77,13 @@ const HeatmapPage = (() => {
     map.innerHTML = tiles.length ? `<svg class="hm-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="group" aria-label="Heatmap ${esc(REGIONS[S.region])}: ${tiles.length} aset, ukuran kapitalisasi pasar, warna perubahan persen">
       ${tiles.map((t, k) => {
         const big = t.w > 54 && t.h > 30, chgTxt = Number.isFinite(t.chg) ? (t.chg >= 0 ? '+' : '') + fmt(t.chg, 2) + '%' : 'n/a';
-        const label = `${t.sym} ${t.name}: kapitalisasi ${fmtCompact(t.value)} USD (${fmt(t.value / total * 100, 1)}% dari peta), perubahan ${chgTxt}`;
+        /* nama aksesibel diawali teks yang terlihat di kotak (kode + perubahan), lalu rinciannya */
+        const label = `${t.sym} ${chgTxt}: ${t.name}, kapitalisasi ${fmtCompact(t.value)} USD (${fmt(t.value / total * 100, 1)}% dari peta)`;
         return `<g class="hm-t" data-k="${k}" tabindex="0" role="button" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${t.x.toFixed(1)}" y="${t.y.toFixed(1)}" width="${Math.max(0, t.w - 1).toFixed(1)}" height="${Math.max(0, t.h - 1).toFixed(1)}" fill="${X.changeColor(t.chg)}"/>${big ? `<text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 - 2).toFixed(1)}" text-anchor="middle" class="hm-s">${esc(t.sym)}</text><text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 + 12).toFixed(1)}" text-anchor="middle" class="hm-c">${esc(chgTxt)}</text>` : ''}</g>`;
       }).join('')}</svg>` : `<p class="empty">Tidak ada aset dengan kapitalisasi pasar nyata untuk wilayah ini.</p>`;
     S.tiles = tiles;
     const steps = [-5, -3, -1, 0, 1, 3, 5];
-    $('#hmLegend').innerHTML = `<span class="meta">Perubahan:</span>${steps.map(v => `<span class="hm-sw" style="background:${X.changeColor(v)}">${v > 0 ? '+' : ''}${v}%</span>`).join('')}<span class="hm-sw" style="background:${X.changeColor(NaN)}">n/a</span>
+    $('#hmLegend').innerHTML = `<span class="meta">Perubahan:</span>${steps.map(v => `<span class="hm-sw"><i style="background:${X.changeColor(v)}"></i>${v > 0 ? '+' : ''}${v}%</span>`).join('')}<span class="hm-sw"><i style="background:${X.changeColor(NaN)}"></i>n/a</span>
       <span class="meta">${tiles.length} kotak · ${d.src && d.src.fetchedAt ? 'kapitalisasi diambil ' + esc(fmtAge(d.src.fetchedAt)) : ''} ${d.src && d.src.stale ? qBadge('stale') : ''}</span>`;
     $('#hmRest').innerHTML = d.rest.length ? `<h3 class="fa-h3">Tanpa kapitalisasi pasar (${d.rest.length}) ${qBadge('unavailable', 'tidak diberi ukuran karangan')}</h3>
       <div class="table-wrap"><table class="dense static hm-rest"><thead><tr><th scope="col">Kode</th><th scope="col" class="num">Perubahan</th><th scope="col">Alasan tanpa ukuran</th></tr></thead><tbody>

@@ -17,7 +17,8 @@
   .mk-page { display: grid; gap: 10px; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; }
   .mk-in { padding: 8px 14px 12px; display: grid; gap: 6px; min-inline-size: 0; }
   .mk-tbl th[scope="row"] { text-align: start; font-weight: 500; }
-  .mk-tbl th[scope="row"] .sub, .mk-src .sub { display: block; color: var(--ink-3); font-size: 10.5px; font-weight: 400; white-space: normal; }
+  /* --ink-2 (bukan --ink-3): baris terpilih berlatar kuning tipis, --ink-3 tidak lolos kontras 4,5:1 */
+  .mk-tbl th[scope="row"] .sub, .mk-src .sub { display: block; color: var(--ink-2); font-size: 10.5px; font-weight: 400; white-space: normal; }
   .mk-tbl tr[aria-selected="true"] { background: rgb(224 177 90 / 0.07); }
   .mk-src { max-inline-size: 260px; font-size: 11.5px; color: var(--ink-2); }
   .mk-chart-card { position: sticky; inset-block-start: 0; min-inline-size: 0; }

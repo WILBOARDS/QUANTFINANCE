@@ -15,14 +15,21 @@ const COLLECT = (root) => {
   const sel = 'button, [role="tab"], [role="button"], select, tbody tr[data-iso], tbody tr[data-i], tbody tr[data-mmsi], tbody tr[data-sym], li[data-sym] .row, tbody tr[data-url], tbody tr[data-choke]';
   const out = [];
   const seenRow = new Map();
+  let lin = 0;
   for (const el of document.querySelectorAll(`#page-${root} ${sel.split(', ').join(`, #page-${root} `)}`)) {
     if (el.disabled || !el.getClientRects().length || el.closest('[hidden]')) continue;
     const st = getComputedStyle(el);
     if (st.visibility === 'hidden' || st.display === 'none' || st.pointerEvents === 'none') continue;
+    /* tabel besar (screener, laporan keuangan): kontrol di dalam baris hanya dari 2 baris pertama tiap tbody,
+       dan tombol asal-usul (.lin) maksimal 5 per halaman; perilakunya sama di setiap baris */
+    const inRow = el.tagName !== 'TR' && el.closest('tbody tr');
+    if (inRow && [...inRow.parentElement.children].indexOf(inRow) >= 2) continue;
+    if (el.classList.contains('lin')) { if (lin >= 5) continue; lin++; }
     const isRow = el.tagName === 'TR' || el.classList.contains('row');
     const tb = isRow ? el.closest('tbody, ul, ol') : null;
     if (tb) { const n = seenRow.get(tb) || 0; if (n >= 2) continue; seenRow.set(tb, n + 1); }
-    const data = [...el.attributes].filter(a => a.name.startsWith('data-') || a.name === 'id' || a.name === 'aria-label').map(a => a.name + '=' + a.value).join(',');
+    /* data-qa-key sendiri TIDAK ikut (kalau ikut, kunci kontrol statis tumbuh tiap putaran dan kontrol yang sama diklik berulang) */
+    const data = [...el.attributes].filter(a => (a.name.startsWith('data-') && a.name !== 'data-qa-key') || a.name === 'id' || a.name === 'aria-label').map(a => a.name + '=' + a.value).join(',');
     const key = el.tagName + '|' + data + '|' + (isRow ? '' : el.textContent.trim().slice(0, 30));
     el.setAttribute('data-qa-key', key);
     out.push(key);
@@ -32,7 +39,8 @@ const COLLECT = (root) => {
 
 async function closeOverlays(p) {
   for (let i = 0; i < 3; i++) {
-    const open = await p.evaluate(() => [...document.querySelectorAll('dialog[open]')].map(d => d.id)).catch(() => []);
+    /* dialog dan popover asal-usul (#linPop) ditutup seperti pengguna: Escape */
+    const open = await p.evaluate(() => [...document.querySelectorAll('dialog[open]')].map(d => d.id).concat([...document.querySelectorAll('#linPop')].filter(x => !x.hidden && x.getClientRects().length).map(() => 'linPop'))).catch(() => []);
     if (!open.length) return;
     await p.keyboard.press('Escape'); await p.waitForTimeout(150);
   }
@@ -49,7 +57,8 @@ async function auditPage(p, h, page) {
     const next = keys.find(k => !clicked.has(k));
     if (!next) break;
     clicked.add(next);
-    const el = await p.$(`[data-qa-key="${next.replace(/["\\]/g, '\\$&')}"]`);
+    /* cari di halaman yang sedang diaudit saja: halaman lain bisa punya kontrol berkunci sama (mis. panel "Detail") */
+    const el = await p.$(`#page-${page} [data-qa-key="${next.replace(/["\\]/g, '\\$&')}"]`);
     if (!el) continue;
     try {
       const tag = await el.evaluate(e => e.tagName);
@@ -82,7 +91,11 @@ async function auditPage(p, h, page) {
 
 async function run(p, h) {
   const res = [];
-  for (const pg of await pagesOf(p)) res.push(await auditPage(p, h, pg));
+  for (const pg of await pagesOf(p)) {
+    const t0 = Date.now();
+    res.push(await auditPage(p, h, pg));
+    process.stderr.write(`    ${pg}: ${res[res.length - 1].klik} klik, ${((Date.now() - t0) / 1000).toFixed(0)} dtk\n`);
+  }
   const problems = res.filter(r => r.gagal.length || r.teksRusak.length || r.lencanaSimulasi || r.tautanTanpaNoopener.length);
   if (problems.length) throw new Error('Masalah UI: ' + JSON.stringify(problems));
   return Object.fromEntries(res.map(r => [r.page, r.klik]));

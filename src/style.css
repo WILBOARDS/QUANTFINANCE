@@ -597,7 +597,7 @@
   .chart-na { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--ink-2); z-index: 2; background: rgb(10 23 39 / 0.85); }
   .chart-na[hidden] { display: none; }
   .chart-na p { max-inline-size: 46ch; text-wrap: pretty; font-size: 12px; }
-  .tag-na { font-size: 10px; color: var(--ink-3); border: 1px dotted var(--line); border-radius: 3px; padding: 0 4px; line-height: 1.5; }
+  .tag-na { font-size: 10px; color: var(--ink-2); border: 1px dotted var(--line); border-radius: 3px; padding: 0 4px; line-height: 1.5; }
   .tag-sim { font-size: 10px; color: var(--brass); border: 1px solid var(--brass-dim); border-radius: 3px; padding: 0 4px; line-height: 1.5; }
   .tag-del { font-size: 10px; color: #8fc3ff; border: 1px solid rgb(143 195 255 / 0.4); border-radius: 3px; padding: 0 4px; line-height: 1.5; }
 

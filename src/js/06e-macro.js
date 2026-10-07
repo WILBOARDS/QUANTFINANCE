@@ -174,7 +174,8 @@ const MacroPage = (() => {
   async function surveys() {
     const el = $('#surveyBody');
     const r = await Fred.get(SURVEYS.map(x => x[0]), daysAgo(3 * 365));
-    const breadth = `<div class="na-box"><div>${qBadge('unavailable')} <strong>Market breadth (advance/decline, % saham di atas MA200)</strong></div><p>Belum tersedia. Breadth butuh daftar konstituen indeks dan harga harian setiap konstituennya; daftar konstituen resmi S&amp;P/Nasdaq berlisensi dan tidak ada sumber gratis yang andal untuk seluruh saham.</p></div>`;
+    /* na-design: tidak tersedia KARENA DESAIN (tidak ada sumber gratis), bukan kegagalan muat */
+    const breadth = `<div class="na-box na-design"><div>${qBadge('unavailable')} <strong>Market breadth (advance/decline, % saham di atas MA200)</strong></div><p>Belum tersedia. Breadth butuh daftar konstituen indeks dan harga harian setiap konstituennya; daftar konstituen resmi S&amp;P/Nasdaq berlisensi dan tidak ada sumber gratis yang andal untuk seluruh saham.</p></div>`;
     if (!r.ok) { el.innerHTML = unavailableBox('Survei manufaktur regional (FRED)', r) + breadth; return; }
     const rows = SURVEYS.map(([id, label, org]) => {
       const s = r.series[id], L = lastVal(s), P = valAgo(s, 1);
