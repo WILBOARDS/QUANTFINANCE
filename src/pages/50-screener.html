@@ -1,0 +1,27 @@
+  <!-- ============ HALAMAN: SCREENER (SEC EDGAR frames; hasil filter kuantitatif, bukan rekomendasi) ============ -->
+  <section id="page-screener" class="page scr-page" hidden aria-label="Screener">
+    <section class="card scr-card" aria-labelledby="scrTitle">
+      <div class="card-head">
+        <h2 id="scrTitle">Screener: hasil filter kuantitatif</h2>
+        <span class="meta" id="scrMeta"></span>
+        <span class="spacer"></span>
+        <label class="meta" for="scrYear">Tahun kalender</label>
+        <select id="scrYear"></select>
+        <button type="button" class="mini-btn" id="scrReload">Muat ulang</button>
+        <button type="button" class="mini-btn" id="scrCsv" title="Unduh hasil sebagai CSV">CSV</button>
+      </div>
+      <div class="scr-in">
+        <div class="scr-presets seg" role="group" aria-label="Preset" id="scrPresets"></div>
+        <p class="hint" id="scrNote"></p>
+        <details class="scr-fbox" id="scrFbox">
+          <summary>Filter (batas eksklusif; kosong = tidak dipakai)</summary>
+          <div class="scr-filters" id="scrFilters"></div>
+          <button type="button" class="mini-btn" id="scrApply">Terapkan filter</button>
+          <button type="button" class="mini-btn" id="scrClear">Kosongkan filter</button>
+        </details>
+        <div class="scr-sum" id="scrSum" role="status"></div>
+        <div class="table-wrap" id="scrBody"></div>
+        <p class="hint">Data: SEC EDGAR XBRL frames (laporan tahunan yang diserahkan perusahaan AS ke SEC). Hanya pelapor yang punya ticker. Periode durasi = tahun kalender (CY), neraca = posisi sekitar akhir Desember; perusahaan dengan tahun fiskal berbeda dipasangkan SEC ke periode kalender terdekat. Nilai yang tidak dilaporkan ditulis "–" dan baris itu tidak lolos filter yang memakai nilai tersebut (dihitung sebagai "data kurang", bukan dianggap 0). Ini <b>hasil screening</b>, bukan rekomendasi beli atau jual.</p>
+      </div>
+    </section>
+  </section>

@@ -1,0 +1,68 @@
+/* =====================================================================
+   FUNDAMENTAL (tab FA/EST/DIV/OWN/INSIDER) + SCREENER
+   Tabel padat, tahun sebagai kolom; kolom pertama lengket supaya label tetap terbaca
+   saat tabel digeser ke samping di HP. Tanpa gradien, warna dari token yang sudah ada.
+   ===================================================================== */
+@layer pages {
+  /* ---------- kepala: identitas perusahaan + baris sumber ---------- */
+  .fa-head { display: grid; gap: 4px; padding-block-end: 8px; border-block-end: 1px solid var(--line-soft); margin-block-end: 8px; }
+  .fa-id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .fa-id b { color: var(--ink); font-size: 14px; }
+  /* min-block-size: di dalam grid yang bisa digulir, elemen overflow:auto boleh menyusut sampai 0 */
+  .fa-tabs { margin-block-end: 8px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; min-block-size: 35px; }
+  .fa-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-block: 6px; }
+  .fa-tools h3, .fa-h3 { margin: 0; font-size: 12.5px; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+  .fa-h3 { margin-block: 12px 6px; }
+  .fa-tools select { min-block-size: 28px; }
+
+  /* ---------- tabel laporan ---------- */
+  .fa-wrap { overflow-x: auto; max-inline-size: 100%; }
+  .fa-tbl { min-inline-size: 100%; }
+  .fa-tbl th, .fa-tbl td { white-space: nowrap; }
+  .fa-tbl thead th { vertical-align: bottom; }
+  .fa-tbl td:first-child, .fa-tbl th:first-child { position: sticky; inset-inline-start: 0; background: var(--deep); z-index: 1; white-space: normal; min-inline-size: 150px; max-inline-size: 260px; }
+  .fa-tbl .sub { display: block; color: var(--ink-3); font-size: 10.5px; font-weight: 400; overflow-wrap: anywhere; }
+  .fa-tbl .num .sub { text-align: end; }
+  .fa-pio td:nth-child(2) { white-space: normal; }
+
+  /* ---------- "Lihat perhitungan" ---------- */
+  .fa-calc td { background: rgb(255 255 255 / 0.02); white-space: normal; font-size: 11.5px; color: var(--ink-2); }
+  .fa-calc p { margin: 4px 0; }
+  .fa-inputs { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 2px; }
+  .fa-inputs li { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto; gap: 8px; align-items: baseline; padding: 2px 0; border-block-end: 1px dashed var(--line-soft); }
+  .fa-inputs b { font-family: var(--font-num); font-weight: 500; color: var(--ink); text-align: end; }
+  .fa-score { margin: 4px 0 8px; font-size: 13px; }
+  .fa-ok { color: var(--up); }
+  .fa-no { color: var(--down); }
+  .fa-dk { color: #f3d79a; }
+  .tpill.fa-dk { background: rgb(243 215 154 / 0.1); }
+  .fa-z-aman { color: var(--up); }
+  .fa-z-abu-abu { color: #f3d79a; }
+  .fa-z-tertekan { color: var(--down); }
+  .fa-body > .c-cols { margin-block-start: 12px; }
+  .fa-files { margin: 0; padding-inline-start: 18px; display: grid; gap: 2px; font-size: 12px; }
+
+  /* ---------- screener ---------- */
+  .scr-in { padding: 8px 14px 12px; display: grid; gap: 4px; min-inline-size: 0; }
+  .scr-in > .hint { margin: 2px 0; }
+  .scr-fbox summary { cursor: pointer; font-size: 12px; color: var(--ink-2); padding-block: 4px; }
+  .scr-card .card-head select { min-block-size: 28px; }
+  .scr-presets { display: flex; flex-wrap: wrap; gap: 4px; }
+  .scr-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 10px; margin-block: 8px; }
+  .scr-f { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; gap: 4px; align-items: center; font-size: 11.5px; color: var(--ink-2); }
+  .scr-f input { inline-size: 100%; min-block-size: 28px; font-family: var(--font-num); }
+  .scr-f.on > span { color: var(--ink); }
+  .scr-sum { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 11.5px; color: var(--ink-2); margin-block: 6px; }
+  .scr-tbl th button { all: unset; cursor: pointer; display: inline-flex; gap: 3px; align-items: center; }
+  .scr-tbl th button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .scr-tbl tbody tr { cursor: pointer; }
+  .scr-tbl tbody tr:hover { background: rgb(255 255 255 / 0.03); }
+  .scr-tbl td:first-child, .scr-tbl th:first-child { position: sticky; inset-inline-start: 0; background: var(--deep); z-index: 1; }
+  .scr-tbl .nm { display: block; color: var(--ink-3); font-size: 10.5px; max-inline-size: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+  @media (max-width: 600px) {
+    .fa-tbl td:first-child, .fa-tbl th:first-child { min-inline-size: 110px; max-inline-size: 140px; }
+    .fa-inputs li { grid-template-columns: minmax(0, 1fr) auto; }
+    .fa-inputs li .meta { grid-column: 1 / -1; grid-row: 2; }
+  }
+}

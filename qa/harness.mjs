@@ -42,7 +42,7 @@ export async function createHarness() {
     if (srv) return srvBase;
     const port = await freePort();
     srv = spawn(process.execPath, ['--import', pathToFileURL(here('./server-preload.mjs')).href, here('../server/server.mjs')], {
-      env: { ...process.env, CACHE_DIR: OUT + 'cache', PORT: String(port), HOST: '127.0.0.1', AISSTREAM_API_KEY: 'uji', FINNHUB_API_KEY: 'uji', FRED_API_KEY: '', ENABLE_UNOFFICIAL_YAHOO: '1', DIGITRAFFIC_ENABLED: '1', ...extraEnv },
+      env: { ...process.env, CACHE_DIR: OUT + 'cache', PORT: String(port), HOST: '127.0.0.1', AISSTREAM_API_KEY: 'uji', FINNHUB_API_KEY: 'uji', FRED_API_KEY: '', ENABLE_UNOFFICIAL_YAHOO: '1', DIGITRAFFIC_ENABLED: '1', SEC_USER_AGENT: 'QuantTerminal uji test@example.invalid', ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     srv.stdout.on('data', d => { srvLog += d; }); srv.stderr.on('data', d => { srvLog += d; });

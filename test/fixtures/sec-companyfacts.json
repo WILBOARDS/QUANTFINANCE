@@ -1,0 +1,238 @@
+{
+  "cik": 1234567,
+  "entityName": "[UJI] Contoh Manufaktur Inc.",
+  "facts": {
+    "dei": {
+      "EntityCommonStockSharesOutstanding": {
+        "label": "Entity Common Stock, Shares Outstanding",
+        "description": "[UJI] Indicate number of shares outstanding.",
+        "units": {
+          "shares": [
+            {"end": "2024-02-09", "val": 50200000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21", "frame": "CY2024Q1I"},
+            {"end": "2024-10-25", "val": 50600000, "accn": "0001234567-24-000040", "fy": 2024, "fp": "Q3", "form": "10-Q", "filed": "2024-11-01", "frame": "CY2024Q3I"},
+            {"end": "2025-02-10", "val": 50500000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2025Q1I"}
+          ]
+        }
+      }
+    },
+    "us-gaap": {
+      "Revenues": {
+        "label": "Revenues",
+        "description": "[UJI] Amount of revenue recognized.",
+        "units": {
+          "USD": [
+            {"start": "2021-01-01", "end": "2021-12-31", "val": 650000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 700000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 790000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"start": "2023-01-01", "end": "2023-03-31", "val": 180000000, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"start": "2024-01-01", "end": "2024-03-31", "val": 230000000, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"start": "2024-01-01", "end": "2024-03-31", "val": 231000000, "accn": "0001234567-24-000025", "fy": 2024, "fp": "Q1", "form": "10-Q/A", "filed": "2024-06-15"},
+            {"start": "2024-04-01", "end": "2024-06-30", "val": 240000000, "accn": "0001234567-24-000030", "fy": 2024, "fp": "Q2", "form": "10-Q", "filed": "2024-08-01"},
+            {"start": "2024-01-01", "end": "2024-06-30", "val": 470000000, "accn": "0001234567-24-000030", "fy": 2024, "fp": "Q2", "form": "10-Q", "filed": "2024-08-01"},
+            {"start": "2024-07-01", "end": "2024-09-30", "val": 250000000, "accn": "0001234567-24-000040", "fy": 2024, "fp": "Q3", "form": "10-Q", "filed": "2024-11-01"},
+            {"start": "2024-01-01", "end": "2024-09-30", "val": 720000000, "accn": "0001234567-24-000040", "fy": 2024, "fp": "Q3", "form": "10-Q", "filed": "2024-11-01"},
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 700000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2022"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 800000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2023"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 1000000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2024"}
+          ]
+        }
+      },
+      "CostOfRevenue": {
+        "label": "Cost of Revenue",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 450000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 500000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 600000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "GrossProfit": {
+        "label": "Gross Profit",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 250000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 300000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 400000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "OperatingIncomeLoss": {
+        "label": "Operating Income (Loss)",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 90000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 100000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 150000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "Net Income (Loss) Attributable to Parent",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2021-01-01", "end": "2021-12-31", "val": 45000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 50000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 60000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 100000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "EarningsPerShareDiluted": {
+        "label": "Earnings Per Share, Diluted",
+        "description": "[UJI]",
+        "units": {
+          "USD/shares": [
+            {"start": "2024-01-01", "end": "2024-03-31", "val": 0.46, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 0.96, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 1.20, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 1.96, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "WeightedAverageNumberOfDilutedSharesOutstanding": {
+        "label": "Weighted Average Number of Shares Outstanding, Diluted",
+        "description": "[UJI]",
+        "units": {
+          "shares": [
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 52000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 50000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 51000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "NetCashProvidedByUsedInOperatingActivities": {
+        "label": "Net Cash Provided by (Used in) Operating Activities",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2024-01-01", "end": "2024-03-31", "val": 30000000, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"start": "2024-01-01", "end": "2024-06-30", "val": 62000000, "accn": "0001234567-24-000030", "fy": 2024, "fp": "Q2", "form": "10-Q", "filed": "2024-08-01"},
+            {"start": "2024-01-01", "end": "2024-09-30", "val": 95000000, "accn": "0001234567-24-000040", "fy": 2024, "fp": "Q3", "form": "10-Q", "filed": "2024-11-01"},
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 70000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 90000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 130000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "PaymentsToAcquirePropertyPlantAndEquipment": {
+        "label": "Payments to Acquire Property, Plant, and Equipment",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2022-01-01", "end": "2022-12-31", "val": 20000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 25000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 30000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "PaymentsOfDividends": {
+        "label": "Payments of Dividends",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 15000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 20000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "CommonStockDividendsPerShareDeclared": {
+        "label": "Common Stock, Dividends, Per Share, Declared",
+        "description": "[UJI]",
+        "units": {
+          "USD/shares": [
+            {"start": "2023-01-01", "end": "2023-12-31", "val": 0.30, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 0.40, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "Assets": {
+        "label": "Assets",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2022-12-31", "val": 1500000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"end": "2023-12-31", "val": 1600000000, "accn": "0001234567-24-000008", "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2024-02-21"},
+            {"end": "2023-12-31", "val": 1600000000, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"end": "2024-03-31", "val": 1650000000, "accn": "0001234567-24-000020", "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01"},
+            {"end": "2023-12-31", "val": 1600000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2023Q4I"},
+            {"end": "2024-12-31", "val": 2000000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20", "frame": "CY2024Q4I"}
+          ]
+        }
+      },
+      "AssetsCurrent": {
+        "label": "Assets, Current",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 600000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 800000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "LiabilitiesCurrent": {
+        "label": "Liabilities, Current",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 350000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 400000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "Liabilities": {
+        "label": "Liabilities",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 900000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 1000000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "StockholdersEquity": {
+        "label": "Stockholders' Equity Attributable to Parent",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 700000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 1000000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "RetainedEarningsAccumulatedDeficit": {
+        "label": "Retained Earnings (Accumulated Deficit)",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 420000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 500000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "LongTermDebtNoncurrent": {
+        "label": "Long-term Debt, Excluding Current Maturities",
+        "description": "[UJI] Hanya FY2024; FY2023 sengaja tidak ada untuk menguji \"Data kurang\".",
+        "units": {
+          "USD": [
+            {"end": "2024-12-31", "val": 300000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      },
+      "CashAndCashEquivalentsAtCarryingValue": {
+        "label": "Cash and Cash Equivalents, at Carrying Value",
+        "description": "[UJI]",
+        "units": {
+          "USD": [
+            {"end": "2023-12-31", "val": 150000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"},
+            {"end": "2024-12-31", "val": 200000000, "accn": "0001234567-25-000010", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-20"}
+          ]
+        }
+      }
+    }
+  }
+}

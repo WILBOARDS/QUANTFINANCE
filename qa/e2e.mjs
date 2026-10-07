@@ -7,7 +7,9 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHarness } from './harness.mjs';
 
-const filter = (process.argv[2] || '').toLowerCase();
+/* filter: satu atau beberapa (dipisah koma atau spasi): `node qa/e2e.mjs E7,H` atau `node qa/e2e.mjs E7 H` */
+const filters = process.argv.slice(2).join(',').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+const filter = filters.join(',');
 let h;
 try { h = await createHarness(); }
 catch (e) { console.error(e.message); process.exit(2); }
@@ -15,8 +17,7 @@ console.log(`Browser: ${h.browserInfo.path} (${h.browserInfo.via})`);
 
 const dir = fileURLToPath(new URL('./scenarios/', import.meta.url));
 const scenario = h.scenario;
-const byId = /^[a-z]\d*$/.test(filter);
-const match = name => { const n = name.toLowerCase(); return byId ? n.split(' ')[0].startsWith(filter) : n.includes(filter); };
+const match = name => { const n = name.toLowerCase(); return filters.some(f => (/^[a-z]\d*$/.test(f) ? n.split(' ')[0].startsWith(f) : n.includes(f))); };
 if (filter) h.scenario = (name, fn, opts) => (match(name) ? scenario(name, fn, opts) : Promise.resolve());
 for (const f of readdirSync(dir).filter(f => f.endsWith('.mjs')).sort()) {
   const mod = await import(pathToFileURL(dir + f).href);
