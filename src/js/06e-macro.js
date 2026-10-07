@@ -167,6 +167,24 @@ const MacroPage = (() => {
       <div class="src-foot">${qBadge(r.stale ? 'stale' : 'eod', 'Harian untuk minyak/gas; bulanan (rata-rata) untuk logam & pertanian')} FRED (EIA, IMF Primary Commodity Prices). Volatilitas = ${qBadge('calculated')} dari 3 bulan terakhir. Emas, perak, litium: tidak tersedia di FRED gratis. Persediaan, produksi, ekspor/impor energi: butuh kunci EIA (belum dipasang).</div>`;
   }
 
+  /* ISM PMI berlisensi dan tidak ada di FRED. Pengganti gratis: survei manufaktur Fed regional
+     (indeks difusi aktivitas umum saat ini; > 0 = lebih banyak responden melaporkan kenaikan).
+     Hanya seri yang ID-nya pasti; yang tidak yakin tidak ditebak. */
+  const SURVEYS = [['GACDFSA066MSFRBPHI', 'Philadelphia Fed: aktivitas umum manufaktur', 'Federal Reserve Bank of Philadelphia, Manufacturing Business Outlook Survey'], ['GACDINA066MNFRBNY', 'Empire State (NY Fed): kondisi bisnis umum', 'Federal Reserve Bank of New York, Empire State Manufacturing Survey']];
+  async function surveys() {
+    const el = $('#surveyBody');
+    const r = await Fred.get(SURVEYS.map(x => x[0]), daysAgo(3 * 365));
+    const breadth = `<div class="na-box"><div>${qBadge('unavailable')} <strong>Market breadth (advance/decline, % saham di atas MA200)</strong></div><p>Belum tersedia. Breadth butuh daftar konstituen indeks dan harga harian setiap konstituennya; daftar konstituen resmi S&amp;P/Nasdaq berlisensi dan tidak ada sumber gratis yang andal untuk seluruh saham.</p></div>`;
+    if (!r.ok) { el.innerHTML = unavailableBox('Survei manufaktur regional (FRED)', r) + breadth; return; }
+    const rows = SURVEYS.map(([id, label, org]) => {
+      const s = r.series[id], L = lastVal(s), P = valAgo(s, 1);
+      if (!L) return `<tr><td>${esc(label)}</td><td class="num c-na" colspan="4">tidak tersedia ${s && s.error ? '(' + esc(s.error) + ')' : ''}</td></tr>`;
+      return `<tr><td>${esc(label)} <span class="sub">${esc(id)} · ${esc(org)}</span></td><td class="num">${fredLin(id, label, fmt(L.value, 1), 'indeks difusi', L.date, 'persen responden "naik" − persen responden "turun"')}</td><td class="num">${P ? fmt(P.value, 1) : '–'}</td><td class="${L.value > 0 ? 'up' : L.value < 0 ? 'down' : ''}">${L.value > 0 ? 'ekspansi' : L.value < 0 ? 'kontraksi' : 'datar'}</td><td>${esc(L.date)}</td></tr>`;
+    }).join('');
+    el.innerHTML = `<table class="dense static"><thead><tr><th>Survei</th><th class="num">Terbaru</th><th class="num">Sebelumnya</th><th>Arah</th><th>Periode</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="src-foot">${qBadge(r.stale ? 'stale' : 'historical', 'Survei bulanan')} FRED${r.fetchedAt ? ' · diambil ' + esc(fmtAge(r.fetchedAt)) : ''}. Ini <b>BUKAN PMI</b>: ISM PMI dan S&amp;P Global PMI berlisensi dan tidak tersedia gratis. Indeks difusi Fed regional berpusat di 0 (bukan 50 seperti PMI) dan hanya mewakili satu wilayah.</div>${breadth}`;
+  }
+
   async function centralBanks() {
     const el = $('#cbBody');
     const r = await CountryData.policyRates();
@@ -285,7 +303,7 @@ const MacroPage = (() => {
     built = true;
     const g = document.createElement('section');
     g.className = 'card analog-card'; g.setAttribute('aria-label', 'Analog historis');
-    g.innerHTML = '<div class="card-head"><h2>Analog historis</h2><span class="meta">periode dengan kondisi makro AS paling mirip</span></div><div class="side-body" id="analogBody"><p class="loading">Menunggu data FRED</p></div>';
+    g.innerHTML = '<div class="card-head"><h2>Analog historis</h2><span class="flag" title="Model jarak sederhana buatan aplikasi; bukan prediksi">Eksperimental</span><span class="meta">periode dengan kondisi makro AS paling mirip</span></div><div class="side-body" id="analogBody"><p class="loading">Menunggu data FRED</p></div>';
     $('#page-macro').insertBefore(g, $('.stress-card'));
     $('#corrSeg').addEventListener('click', e => { const b = e.target.closest('[data-tf]'); if (!b) return; S.corrN = +b.dataset.tf; $$('#corrSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); corr(); });
     $('#macroExport').addEventListener('click', () => { if (!S.macroRows) return; download('makro-as.csv', toCsv([['seri', 'indikator', 'terbaru', 'sebelumnya', 'periode', 'satuan'], ...S.macroRows.map(x => [x.id, x.label, x.now ?? '', x.prev ?? '', x.date ?? '', x.unit])]), 'text/csv'); });
@@ -301,13 +319,14 @@ const MacroPage = (() => {
       stress();
       if (loaded) return;
       loaded = true;
-      ['#curveBody', '#macroBody', '#cmdtyBody', '#cbBody', '#regimeBody', '#corrBody'].forEach(s => { $(s).innerHTML = '<p class="loading">Memuat</p>'; });
+      ['#curveBody', '#macroBody', '#cmdtyBody', '#cbBody', '#regimeBody', '#corrBody', '#surveyBody'].forEach(s => { $(s).innerHTML = '<p class="loading">Memuat</p>'; });
       const safe = (fn, sel, what) => fn().catch(e => { console.warn(what, e); $(sel).innerHTML = unavailableBox(what, { error: 'Kesalahan aplikasi: ' + e.message }); });
       safe(regimeAndCorr, '#regimeBody', 'Rezim pasar');
       safe(curve, '#curveBody', 'Kurva imbal hasil');
       safe(macro, '#macroBody', 'Dasbor makro');
       safe(commodities, '#cmdtyBody', 'Komoditas');
       safe(centralBanks, '#cbBody', 'Bank sentral');
+      safe(surveys, '#surveyBody', 'Survei manufaktur regional');
     },
     reload() { loaded = false; },
     get regime() { return S.regime; },

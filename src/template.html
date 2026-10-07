@@ -227,7 +227,24 @@
         <button type="button" class="mini-btn" id="newsRefresh">Muat ulang</button>
         <button type="button" class="mini-btn" id="newsExport">CSV</button>
       </div>
-      <div class="search row"><input id="newsQ" type="search" placeholder="Saring judul, sumber, atau negara (contoh: rupiah, OPEC, Fed)" autocomplete="off" aria-label="Saring berita"></div>
+      <form class="news-gq row" id="newsGqForm" role="search" aria-label="Cari berita di GDELT">
+        <input id="newsGq" type="search" maxlength="80" placeholder="Cari di GDELT (kueri baru): rupiah, Bank Indonesia, nickel" autocomplete="off" spellcheck="false" aria-label="Kueri GDELT">
+        <button type="submit" class="mini-btn">Cari di GDELT</button>
+        <button type="button" class="mini-btn" id="newsGqClear" hidden>Kembali ke kategori</button>
+        <span class="meta" id="newsMode" role="status"></span>
+      </form>
+      <div class="news-ctl row">
+        <div class="seg" role="group" aria-label="Tampilan" id="newsView">
+          <button type="button" data-view="breaking" aria-pressed="false" title="Judul 2 jam terakhir, terbaru dulu">Breaking</button>
+          <button type="button" data-view="time" aria-pressed="true" title="Semua judul, terbaru dulu">Terbaru</button>
+          <button type="button" data-view="impact" aria-pressed="false" title="Skor dampak heuristik tertinggi dulu (Analisis otomatis)">Paling relevan</button>
+        </div>
+        <input id="newsQ" type="search" placeholder="Saring hasil: judul, sumber, negara" autocomplete="off" aria-label="Saring hasil yang sudah dimuat">
+        <select id="newsFTheme" aria-label="Saring tema (Analisis otomatis)"><option value="">Semua tema</option></select>
+        <select id="newsFCountry" aria-label="Saring negara sumber"><option value="">Semua negara sumber</option></select>
+        <select id="newsFDomain" aria-label="Saring domain sumber"><option value="">Semua domain</option></select>
+        <label class="chk"><input type="checkbox" id="newsFSpec"> Hanya spekulatif</label>
+      </div>
       <div class="table-wrap" id="newsWrap"><table class="dense news-table" id="newsTable"></table></div>
       <div class="src-foot" id="newsSrc"></div>
     </section>
@@ -268,10 +285,11 @@
 
   <!-- ============ HALAMAN: MAKRO ============ -->
   <section id="page-macro" class="page macro-grid" hidden>
-    <section class="card regime-card" aria-label="Rezim pasar"><div class="card-head"><h2>Rezim pasar</h2><span class="spacer"></span><span id="regimeBadge"></span></div><div class="side-body" id="regimeBody"></div></section>
+    <section class="card regime-card" aria-label="Rezim pasar"><div class="card-head"><h2>Rezim pasar</h2><span class="flag" title="Model aturan buatan aplikasi; belum divalidasi secara statistik">Eksperimental</span><span class="spacer"></span><span id="regimeBadge"></span></div><div class="side-body" id="regimeBody"></div></section>
     <section class="card curve-card" aria-label="Kurva imbal hasil"><div class="card-head"><h2>Obligasi pemerintah AS</h2><span class="spacer"></span><span class="meta" id="curveMeta"></span></div><div class="side-body" id="curveBody"></div></section>
     <section class="card macro-card" aria-label="Indikator makro"><div class="card-head"><h2>Dasbor makro AS</h2><span class="spacer"></span><button type="button" class="mini-btn" id="macroExport">CSV</button></div><div class="table-wrap" id="macroBody"></div></section>
     <section class="card cmdty-card" aria-label="Komoditas"><div class="card-head"><h2>Komoditas dan energi</h2></div><div class="table-wrap" id="cmdtyBody"></div></section>
+    <section class="card survey-card" aria-label="Survei manufaktur dan breadth"><div class="card-head"><h2>Survei manufaktur regional (pengganti PMI)</h2><span class="spacer"></span><span class="meta">FRED, bulanan</span></div><div class="table-wrap" id="surveyBody"></div></section>
     <section class="card cb-card" aria-label="Bank sentral"><div class="card-head"><h2>Bank sentral</h2><span class="meta">suku bunga kebijakan, BIS</span></div><div class="table-wrap" id="cbBody"></div></section>
     <section class="card corr-card" aria-label="Matriks korelasi"><div class="card-head"><h2>Korelasi lintas aset</h2>
       <div class="seg" id="corrSeg" role="group" aria-label="Jangka waktu korelasi">

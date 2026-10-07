@@ -70,82 +70,132 @@ function impactPanel(n) {
     <p class="disclaimer">Analisis di atas dihitung dari kata kunci judul dan aturan umum ekonomi. Itu inferensi, bukan bukti sebab-akibat, dan bukan nasihat investasi. Baca artikelnya sebelum menyimpulkan.</p>`;
 }
 
+/* Terminal berita: kategori tetap ATAU kueri bebas GDELT (perintah "N RUPIAH"), tampilan Breaking /
+   Terbaru / Paling relevan, saringan tema/negara sumber/domain/spekulatif, dan penggabungan judul
+   yang hampir sama (logika murni di shared/newsrank.mjs). Tema, sentimen, dan skor dampak = Analisis
+   otomatis (heuristik kata kunci), bukan fakta. */
 const NewsPage = (() => {
-  const S = { cat: 'all', span: '24h', q: '', sel: null, list: [], res: null, sort: 'time' };
+  const S = { cat: 'all', span: '24h', q: '', gq: '', sel: null, list: [], raw: 0, res: null, view: 'time', f: { theme: '', country: '', domain: '', spec: false } };
   let built = false, loadSeq = 0;
+  const VIEW_LABEL = { breaking: 'Breaking (2 jam terakhir)', time: 'Terbaru', impact: 'Paling relevan (skor dampak heuristik)' };
   async function load(force) {
     const my = ++loadSeq;                       // hanya respons permintaan terakhir yang boleh tampil
-    const [, , query] = NEWS_CATS.find(c => c[0] === S.cat);
+    const alive = () => my === loadSeq;
+    const gq = S.gq ? Newsrank.queryFor(S.gq) : null;
+    const query = gq || NEWS_CATS.find(c => c[0] === S.cat)[2];
     $('#newsTable').innerHTML = '';
     $('#newsSrc').innerHTML = '<span class="loading">Mengambil berita dari GDELT</span>';
+    $('#newsMode').textContent = gq ? 'Kueri GDELT: ' + gq : '';
+    $('#newsGqClear').hidden = !gq;
     const q = query + ' sourcelang:english';
     const p = new URLSearchParams({ query: q, mode: 'artlist', format: 'json', timespan: S.span, maxrecords: '200', sort: 'DateDesc' });
-    const key = 'gdg:' + S.cat + ':' + S.span;
+    const key = gq ? 'gdq:' + gq.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 60) + ':' + S.span : 'gdg:' + S.cat + ':' + S.span;
     if (force) { try { localStorage.removeItem('qtc.' + key); } catch { /* abaikan */ } }
     const r = await getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query: q, mode: 'artlist', timespan: S.span, maxrecords: '200', sort: 'DateDesc' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + p, parse: Parsers.parseGdeltArticles,
-      ttl: force ? 0 : 10 * 60e3, persist: true, key, timeout: 35000,
+      ttl: force ? 0 : 10 * 60e3, persist: !gq, key, timeout: 35000, alive,
     });
-    if (my !== loadSeq) return;
+    if (!alive()) return;
     S.res = r;
     if (!r.ok) {
-      S.list = [];
-      $('#newsWrap').innerHTML = unavailableBox('Berita GDELT', r, 'GDELT gratis, tanpa kunci, tapi membatasi 1 permintaan per 5 detik per IP dan bisa menolak akses langsung dari browser. Jalankan server lokal (npm start) untuk jalur yang lebih andal.') + '<table class="dense news-table" id="newsTable"></table>';
+      S.list = []; S.raw = 0;
+      $('#newsWrap').innerHTML = unavailableBox('Berita GDELT' + (gq ? ' untuk ' + gq : ''), r, 'GDELT gratis, tanpa kunci, tapi membatasi 1 permintaan per 5 detik per IP dan bisa menolak akses langsung dari browser. Jalankan server lokal (npm start) untuk jalur yang lebih andal.') + '<table class="dense news-table" id="newsTable"></table>';
       $('#newsSrc').innerHTML = '';
       $('#newsSide').innerHTML = '<p class="hint">Analisis dampak muncul setelah berita berhasil dimuat.</p>';
+      facets();
       return;
     }
     $('#newsWrap').innerHTML = '<table class="dense news-table" id="newsTable"></table>';   // buang kotak error lama
     const now = Date.now();
-    S.list = r.data.map(n => ({ ...n, a: Analytics.analyzeHeadline(n.title, n.seen, now) }));
-    render();
-    $('#newsSrc').innerHTML = srcLine(r, `${S.list.length} judul unik · tema/sentimen/dampak = heuristik kata kunci`);
-    if (!S.sel && S.list.length) { S.sel = [...S.list].sort((a, b) => b.a.impact - a.a.impact)[0].url; render(); side(); }
+    S.raw = r.data.length;
+    S.list = Newsrank.dedupe(r.data).map(n => ({ ...n, a: Analytics.analyzeHeadline(n.title, n.seen, now) }));
+    facets();
+    if (S.sel && !S.list.some(n => n.url === S.sel)) S.sel = null;
+    if (!S.sel && S.list.length) S.sel = Newsrank.sortNews(S.list, 'impact')[0].url;
+    render(); side();
   }
   function filtered() {
-    const q = S.q.trim().toLowerCase();
-    let list = q ? S.list.filter(n => (n.title + ' ' + n.domain + ' ' + n.srcCountry).toLowerCase().includes(q)) : S.list.slice();
-    if (S.sort === 'impact') list.sort((a, b) => b.a.impact - a.a.impact);
-    return list;
+    const base = S.view === 'breaking' ? Newsrank.breaking(S.list) : Newsrank.sortNews(S.list, S.view === 'impact' ? 'impact' : 'time');
+    return Newsrank.filterNews(base, { ...S.f, text: S.q });
+  }
+  /* pilihan saringan dari data yang dimuat; pilihan yang tidak ada lagi dikosongkan */
+  function facets() {
+    const fill = (sel, items, all, lbl) => {
+      const el = $(sel), cur = el.value;
+      el.innerHTML = `<option value="">${esc(all)}</option>` + items.map(([v, n]) => `<option value="${esc(v)}">${esc(lbl ? lbl(v) : v)} (${n})</option>`).join('');
+      el.value = items.some(([v]) => v === cur) ? cur : '';
+    };
+    fill('#newsFTheme', Newsrank.facet(S.list, n => n.a.themes.map(t => t.id)), 'Semua tema', v => (Analytics.THEMES[v] || { label: v }).label);
+    fill('#newsFCountry', Newsrank.facet(S.list, n => n.srcCountry), 'Semua negara sumber');
+    fill('#newsFDomain', Newsrank.facet(S.list, n => n.domain).slice(0, 60), 'Semua domain');
+    S.f.theme = $('#newsFTheme').value; S.f.country = $('#newsFCountry').value; S.f.domain = $('#newsFDomain').value;
   }
   function render() {
     const list = filtered();
     const sentCls = s => (s === 'positif' ? 'up' : s === 'negatif' ? 'down' : '');
-    $('#newsTable').innerHTML = `<thead><tr><th scope="col"><button type="button" data-ns="time" ${S.sort === 'time' ? 'data-dir="desc"' : ''}>Waktu</button></th><th scope="col">Sumber</th><th scope="col">Judul</th><th scope="col">Negara sumber</th><th scope="col">Tema</th><th scope="col">Sentimen</th><th scope="col" class="num"><button type="button" data-ns="impact" ${S.sort === 'impact' ? 'data-dir="desc"' : ''}>Dampak</button></th></tr></thead><tbody>` +
+    $('#newsTable').innerHTML = `<caption class="sr">Berita: ${esc(VIEW_LABEL[S.view])}</caption><thead><tr><th scope="col">Waktu</th><th scope="col">Sumber</th><th scope="col">Judul</th><th scope="col">Negara sumber</th><th scope="col">Tema ${qBadge('inference', 'Analisis otomatis: heuristik kata kunci judul')}</th><th scope="col">Sentimen ${qBadge('inference', 'Analisis otomatis: leksikon kata, bukan fakta')}</th><th scope="col" class="num">Dampak ${qBadge('calculated', 'Skor heuristik 0-100, bukan fakta')}</th></tr></thead><tbody>` +
       list.map(n => `<tr data-url="${esc(n.url)}" tabindex="0" aria-selected="${n.url === S.sel}">
         <td class="num">${esc(fmtTime(n.seen))}</td><td>${esc(n.domain.replace(/^www\./, '').slice(0, 24))}</td>
-        <td class="wrap">${esc(n.title)}${n.a.speculative ? ' <span class="tpill spec">spekulatif</span>' : ''}</td>
+        <td class="wrap">${esc(n.title)}${n.a.speculative ? ' <span class="tpill spec">spekulatif</span>' : ''}${n.dupes.length ? ` <span class="tpill dup" data-dupes title="${esc('Judul serupa dari: ' + n.dupes.map(d => d.domain).join(', '))}">+${n.dupes.length} sumber lain</span>` : ''}</td>
         <td>${esc(n.srcCountry)}</td><td>${n.a.themes[0] ? `<span class="tpill ${n.a.themes[0].w >= 22 ? 'hot' : ''}">${esc(n.a.themes[0].label)}</span>` : '<span class="c-na">–</span>'}</td>
         <td class="${sentCls(n.a.sentiment.label)}">${esc(n.a.sentiment.label)}</td>
         <td class="num"><span class="heat" style="background:${n.a.impact > 60 ? 'rgb(255 111 97 / 0.3)' : n.a.impact > 35 ? 'rgb(224 177 90 / 0.22)' : 'transparent'}">${n.a.impact}</span></td></tr>`).join('') +
-      (list.length ? '' : '<tr><td colspan="7" class="c-na">Tidak ada judul yang cocok dengan saringan.</td></tr>') + '</tbody>';
+      (list.length ? '' : `<tr><td colspan="7" class="c-na">${S.view === 'breaking' && S.list.length ? 'Tidak ada judul dalam 2 jam terakhir (GDELT memantau dengan jeda ±15 menit). Pilih Terbaru untuk semua judul.' : 'Tidak ada judul yang cocok dengan saringan.'}</td></tr>`) + '</tbody>';
+    if (S.res && S.res.ok) {
+      const merged = S.raw - S.list.length;
+      $('#newsSrc').innerHTML = srcLine(S.res, `${VIEW_LABEL[S.view]} · ${list.length} tampil dari ${S.list.length} judul unik${merged > 0 ? ` (${merged} judul serupa digabung)` : ''} · tema/sentimen/dampak = Analisis otomatis (heuristik kata kunci)`);
+    }
   }
   function side() {
     const n = S.list.find(x => x.url === S.sel);
-    $('#newsSide').innerHTML = n ? impactPanel(n) : '<p class="hint">Pilih satu berita untuk melihat analisis dampaknya.</p>';
+    $('#newsSide').innerHTML = n ? impactPanel(n) + (n.dupes.length ? `<div><h3>Judul serupa dari sumber lain (${n.dupes.length})</h3><ul class="dupe-list">${n.dupes.map(d => `<li><a href="${safeUrl(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.title)}</a> <span class="meta">${esc(d.domain)} · ${esc(fmtTime(d.seen))}</span></li>`).join('')}</ul><p class="hint">Digabung otomatis karena kata-kata judulnya hampir sama (kemiripan ≥ 60%). Yang ditampilkan di tabel adalah yang paling awal.</p></div>` : '') : '<p class="hint">Pilih satu berita untuk melihat analisis dampaknya.</p>';
   }
+  function setView(v) { S.view = v; Store.set('newsView', v); $$('#newsView [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v))); render(); }
   function build() {
     if (built) return;
     built = true;
     $('#newsCats').innerHTML = NEWS_CATS.map(([k, l]) => `<button type="button" data-cat="${k}" aria-pressed="${S.cat === k}">${l}</button>`).join('');
-    $('#newsCats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; S.cat = b.dataset.cat; S.sel = null; $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); load(); });
+    $('#newsCats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; S.cat = b.dataset.cat; S.gq = ''; $('#newsGq').value = ''; S.sel = null; $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); load(); });
     $('#newsSpan').addEventListener('change', e => { S.span = e.target.value; S.sel = null; load(); });
     $('#newsQ').addEventListener('input', e => { S.q = e.target.value; render(); });
+    $('#newsGqForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const v = $('#newsGq').value.trim();
+      if (!Newsrank.queryFor(v)) { $('#newsMode').textContent = 'Kueri minimal 3 huruf (huruf, angka, spasi, tanda hubung).'; return; }
+      S.gq = v; S.sel = null; $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', 'false')); load();
+    });
+    $('#newsGqClear').addEventListener('click', () => { S.gq = ''; $('#newsGq').value = ''; S.sel = null; $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.cat === S.cat))); load(); });
+    $('#newsView').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+    $('#newsFTheme').addEventListener('change', e => { S.f.theme = e.target.value; render(); });
+    $('#newsFCountry').addEventListener('change', e => { S.f.country = e.target.value; render(); });
+    $('#newsFDomain').addEventListener('change', e => { S.f.domain = e.target.value; render(); });
+    $('#newsFSpec').addEventListener('change', e => { S.f.spec = e.target.checked; render(); });
     $('#newsRefresh').addEventListener('click', () => load(true));
-    $('#newsExport').addEventListener('click', () => download('berita.csv', toCsv([['waktu', 'sumber', 'judul', 'url', 'negara_sumber', 'tema', 'sentimen', 'dampak', 'spekulatif'], ...filtered().map(n => [n.seen, n.domain, n.title, n.url, n.srcCountry, n.a.themes.map(t => t.id).join('|'), n.a.sentiment.label, n.a.impact, n.a.speculative])]), 'text/csv'));
+    $('#newsExport').addEventListener('click', () => download('berita.csv', toCsv([['waktu', 'sumber', 'judul', 'url', 'negara_sumber', 'tema', 'sentimen', 'dampak', 'spekulatif', 'sumber_serupa'], ...filtered().map(n => [n.seen, n.domain, n.title, n.url, n.srcCountry, n.a.themes.map(t => t.id).join('|'), n.a.sentiment.label, n.a.impact, n.a.speculative, n.dupes.map(d => d.domain).join('|')])]), 'text/csv'));
     $('#newsWrap').addEventListener('click', e => {
-      const s = e.target.closest('[data-ns]'); if (s) { S.sort = s.dataset.ns; render(); return; }
       const tr = e.target.closest('tr[data-url]'); if (!tr) return;
       S.sel = tr.dataset.url; $$('#newsTable tbody tr').forEach(x => x.setAttribute('aria-selected', String(x === tr))); side();
     });
+    $('#newsWrap').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-url]')) e.target.click(); });
     $('#newsSide').addEventListener('click', e => {
       const c = e.target.closest('[data-country]'); if (c) { CountryPage.open(c.dataset.country, 'news'); App.showPage('country'); return; }
       const p = e.target.closest('[data-pick]'); if (p) bus.emit('pickSym', { sym: p.dataset.pick, go: true });
     });
+    const v = Store.get('newsView', 'time');
+    if (VIEW_LABEL[v]) setView(v);
   }
   return {
     show() { build(); if (!S.res) load(); },
-    search(q, cat) { build(); if (cat) S.cat = cat; S.q = q || ''; $('#newsQ').value = S.q; $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.cat === S.cat))); load(); },
+    /* q = kueri GDELT baru (mis. dari "N RUPIAH"); kosong = kategori cat */
+    search(q, cat) {
+      build();
+      if (cat) S.cat = cat;
+      S.gq = q && Newsrank.queryFor(q) ? String(q).trim() : '';
+      S.q = ''; $('#newsQ').value = ''; $('#newsGq').value = S.gq; S.sel = null;
+      $$('#newsCats button').forEach(x => x.setAttribute('aria-pressed', String(!S.gq && x.dataset.cat === S.cat)));
+      load();
+    },
+    get state() { return { view: S.view, gq: S.gq, cat: S.cat, unique: S.list.length, raw: S.raw, shown: S.res && S.res.ok ? filtered().length : 0 }; },
   };
 })();

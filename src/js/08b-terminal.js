@@ -52,7 +52,10 @@ const Terminal = (() => {
         return { ok: true };
       case 'news':
         if (e && e.type === 'country') { CountryPage.open(iso3Of(e), 'news'); App.showPage('country'); return { ok: true }; }
-        if (e && ['stock', 'etf', 'index', 'crypto', 'fx', 'commodity', 'rate', 'company'].includes(e.type)) { SecurityPage.open(e, 'news'); App.showPage('security'); return { ok: true }; }
+        /* bentuk global "N <teks>" / "NEWS <teks>" = kueri GDELT bebas (mis. N RUPIAH), walaupun teksnya cocok dengan aset;
+           bentuk aset "USDIDR NEWS" = tab Berita di detail aset */
+        if (e && ['stock', 'etf', 'index', 'crypto', 'fx', 'commodity', 'rate', 'company'].includes(e.type) && !/^NEWS /.test(r.canonical || '')) { SecurityPage.open(e, 'news'); App.showPage('security'); return { ok: true }; }
+        if (/^NEWS /.test(r.canonical || '') && r.query && (!e || e.type !== 'topic')) { App.showPage('news'); NewsPage.search(r.query, 'all'); return { ok: true }; }
         App.showPage('news');
         NewsPage.search(e && e.type === 'topic' ? '' : (r.query || ''), e && e.type === 'topic' ? (TOPIC_CAT[e.id.split(':')[1]] || 'all') : 'all');
         return { ok: true };
