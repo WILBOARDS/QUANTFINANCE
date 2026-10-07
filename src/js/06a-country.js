@@ -516,11 +516,13 @@ const CountryPage = (() => {
         <button type="button" class="mini-btn" data-act="cmp" aria-pressed="${inCmp}">${inCmp ? 'Di perbandingan' : 'Tambah ke perbandingan'}</button>
         <button type="button" class="mini-btn" data-act="export">Unduh JSON</button></div>
       <div class="tabs" role="tablist">
-        ${[['overview', 'Ringkasan ekonomi'], ['news', 'Berita dan spekulasi'], ['compare', 'Bandingkan']].map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}</button>`).join('')}
+        ${[['overview', 'Ringkasan ekonomi'], ['market', 'Pasar'], ['news', 'Berita dan spekulasi'], ['compare', 'Bandingkan']].map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}</button>`).join('')}
       </div>
-      <div id="cTabBody">${S.tab === 'overview' ? overview(c) : S.tab === 'compare' ? compareTab() : `<div class="c-body"><div class="cmp-tools"><div class="seg" role="group" aria-label="Sumber berita"><button type="button" data-nm="about" aria-pressed="${S.newsMode === 'about'}">Tentang ${esc(c.name)} (EN)</button><button type="button" data-nm="local" aria-pressed="${S.newsMode === 'local'}">Media lokal</button></div></div><div id="cNews"></div></div>`}</div>`;
+      <div id="cTabBody">${S.tab === 'overview' ? overview(c) : S.tab === 'market' ? '<div id="cMkt"><p class="loading">Memuat pasar</p></div>' : S.tab === 'compare' ? compareTab() : `<div class="c-body"><div class="cmp-tools"><div class="seg" role="group" aria-label="Sumber berita"><button type="button" data-nm="about" aria-pressed="${S.newsMode === 'about'}">Tentang ${esc(c.name)} (EN)</button><button type="button" data-nm="local" aria-pressed="${S.newsMode === 'local'}">Media lokal</button></div></div><div id="cNews"></div></div>`}</div>`;
     if (S.tab === 'overview') { fillDetail(c); fillMonetary(c); }
     if (S.tab === 'news') newsTab(c);
+    /* tab Pasar: src/js/14b-country-x.js */
+    if (S.tab === 'market' && typeof CountryMarket !== 'undefined') { const iso = c.iso3; CountryMarket.render(c, $('#cMkt'), () => S.sel === iso && S.tab === 'market' && !$('#page-country').hidden); }
   }
 
   function select(iso3, tab) {
