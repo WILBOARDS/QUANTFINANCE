@@ -111,7 +111,7 @@ server/lib/ais.mjs       pengumpul AIS (AISStream WebSocket + Digitraffic)
 build.mjs                menggabungkan semuanya jadi dist/quant-terminal.html
 test/                    unit test (npm test) + fixture berformat API asli
 qa/                      tes browser end-to-end (npm run e2e) dengan sumber palsu berlabel [UJI]
-docs/                    konteks proyek, prompt, dan EXTENDING.md (cara menambah fitur tanpa bentrok)
+docs/                    konteks proyek, prompt, EXTENDING.md (cara menambah fitur tanpa bentrok), SECURITY.md (audit keamanan)
 server/routes/*.mjs      rute server tambahan per fitur (dimuat otomatis)
 ```
 
@@ -124,6 +124,7 @@ npm run e2e:install  # SEKALI saja: unduh Chromium yang cocok untuk tes E2E
 npm run e2e          # build + skenario browser (atau set CHROME_PATH ke chrome.exe/msedge.exe)
 npm run e2e -- B4    # hanya skenario yang namanya mengandung "B4"
 npm run secrets      # cari API key bocor di file terlacak, dist, dan seluruh riwayat git
+npm run a11y         # cek aksesibilitas otomatis (axe-core, WCAG A/AA) di semua halaman
 ```
 
 Skenario E2E ada di `qa/scenarios/*.mjs`. Setiap skenario otomatis GAGAL bila ada exception tak tertangkap, promise rejection tak ditangani, console.error (selain kegagalan jaringan yang disengaja), atau indikator loading yang macet lebih dari 20 detik. Screenshot ada di `qa/out/`.
