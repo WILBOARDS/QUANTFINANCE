@@ -72,8 +72,9 @@ function impactPanel(n) {
 
 const NewsPage = (() => {
   const S = { cat: 'all', span: '24h', q: '', sel: null, list: [], res: null, sort: 'time' };
-  let built = false;
+  let built = false, loadSeq = 0;
   async function load(force) {
+    const my = ++loadSeq;                       // hanya respons permintaan terakhir yang boleh tampil
     const [, , query] = NEWS_CATS.find(c => c[0] === S.cat);
     $('#newsTable').innerHTML = '';
     $('#newsSrc').innerHTML = '<span class="loading">Mengambil berita dari GDELT</span>';
@@ -86,6 +87,7 @@ const NewsPage = (() => {
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + p, parse: Parsers.parseGdeltArticles,
       ttl: force ? 0 : 10 * 60e3, persist: true, key, timeout: 35000,
     });
+    if (my !== loadSeq) return;
     S.res = r;
     if (!r.ok) {
       S.list = [];
@@ -94,7 +96,7 @@ const NewsPage = (() => {
       $('#newsSide').innerHTML = '<p class="hint">Analisis dampak muncul setelah berita berhasil dimuat.</p>';
       return;
     }
-    if (!$('#newsTable')) $('#newsWrap').innerHTML = '<table class="dense news-table" id="newsTable"></table>';
+    $('#newsWrap').innerHTML = '<table class="dense news-table" id="newsTable"></table>';   // buang kotak error lama
     const now = Date.now();
     S.list = r.data.map(n => ({ ...n, a: Analytics.analyzeHeadline(n.title, n.seen, now) }));
     render();
@@ -111,7 +113,7 @@ const NewsPage = (() => {
     const list = filtered();
     const sentCls = s => (s === 'positif' ? 'up' : s === 'negatif' ? 'down' : '');
     $('#newsTable').innerHTML = `<thead><tr><th scope="col"><button type="button" data-ns="time" ${S.sort === 'time' ? 'data-dir="desc"' : ''}>Waktu</button></th><th scope="col">Sumber</th><th scope="col">Judul</th><th scope="col">Negara sumber</th><th scope="col">Tema</th><th scope="col">Sentimen</th><th scope="col" class="num"><button type="button" data-ns="impact" ${S.sort === 'impact' ? 'data-dir="desc"' : ''}>Dampak</button></th></tr></thead><tbody>` +
-      list.map(n => `<tr data-url="${esc(n.url)}" aria-selected="${n.url === S.sel}">
+      list.map(n => `<tr data-url="${esc(n.url)}" tabindex="0" aria-selected="${n.url === S.sel}">
         <td class="num">${esc(fmtTime(n.seen))}</td><td>${esc(n.domain.replace(/^www\./, '').slice(0, 24))}</td>
         <td class="wrap">${esc(n.title)}${n.a.speculative ? ' <span class="tpill spec">spekulatif</span>' : ''}</td>
         <td>${esc(n.srcCountry)}</td><td>${n.a.themes[0] ? `<span class="tpill ${n.a.themes[0].w >= 22 ? 'hot' : ''}">${esc(n.a.themes[0].label)}</span>` : '<span class="c-na">–</span>'}</td>

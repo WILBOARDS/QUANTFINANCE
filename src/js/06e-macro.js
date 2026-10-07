@@ -34,11 +34,17 @@ const Fred = (() => {
       const part = need.slice(i, i + 12);
       const r = await getData('fred', { server: `/api/fred?series=${part.join(',')}&start=${start}${freq ? '&freq=' + freq : ''}`, ttl: 3 * 3600e3, key: 'fred:' + part.join(',') + start + (freq || '') });
       if (!r.ok) { if (i === 0) return r; continue; }
-      for (const id of part) mem[id + start + (freq || '')] = r.data[id] ? { ...r.data[id], error: null } : { data: [], error: (r.extra && r.extra.errors && r.extra.errors[id]) || 'tidak ada data' };
+      for (const id of part) {
+        const sd = r.data[id];
+        mem[id + start + (freq || '')] = sd ? { ...sd, error: null, stale: !!(r.stale || sd.stale), fetchedAt: sd.fetchedAt || r.fetchedAt } : { data: [], error: (r.extra && r.extra.errors && r.extra.errors[id]) || 'tidak ada data' };
+        if (sd) FredMeta[id] = { stale: !!(r.stale || sd.stale), fetchedAt: sd.fetchedAt || r.fetchedAt, freq: freqOf(sd.data) };
+      }
     }
     const out = {};
     for (const id of ids) out[id] = mem[id + start + (freq || '')] || { data: [], error: 'gagal' };
-    return { ok: true, series: out, source: 'FRED', fetchedAt: new Date().toISOString() };
+    /* waktu ambil = yang paling lama di antara seri (jujur soal umur data), basi bila salah satu basi */
+    const times = Object.values(out).map(x => x.fetchedAt).filter(Boolean).sort();
+    return { ok: true, series: out, source: 'FRED', fetchedAt: times[0] || null, stale: Object.values(out).some(x => x.stale) };
   }
   return { get };
 })();
@@ -51,8 +57,21 @@ function yoy(s) {
   const prev = [...s.data].reverse().find(p => new Date(p.date) <= target);
   return prev ? { value: (L.value / prev.value - 1) * 100, date: L.date, prevDate: prev.date } : null;
 }
+/* metadata per seri FRED dari respons terakhir: basi?, kapan diambil, frekuensi (diukur dari jarak tanggal) */
+const FredMeta = {};
+function freqOf(pts) {
+  if (!pts || pts.length < 3) return null;
+  const a = pts.slice(-6), gaps = [];
+  for (let i = 1; i < a.length; i++) gaps.push((Date.parse(a[i].date) - Date.parse(a[i - 1].date)) / 86400e3);
+  gaps.sort((x, y) => x - y);
+  const g = gaps[Math.floor(gaps.length / 2)];
+  return g <= 4 ? 'd' : g <= 10 ? 'w' : g <= 35 ? 'm' : g <= 100 ? 'q' : 'a';
+}
+/* kualitas FRED: harian = "Harian" (akhir hari), bulanan/kuartalan = "Historis" (statistik periodik), basi bila server memakai salinan lama */
+function fredQuality(id) { const m = FredMeta[id] || {}; return m.stale ? 'stale' : m.freq === 'd' || m.freq === 'w' ? 'eod' : 'historical'; }
 function fredLin(id, label, value, unit, date, formula) {
-  return Lineage.wrap({ label, value, unit, quality: 'eod', source: 'FRED · ' + id, home: 'https://fred.stlouisfed.org/series/' + id, asOf: date, formula, fetchedAt: new Date().toISOString(), via: 'server' }, esc(value));
+  const m = FredMeta[id] || {};
+  return Lineage.wrap({ label, value, unit, quality: fredQuality(id), source: 'FRED · ' + id, home: 'https://fred.stlouisfed.org/series/' + id, asOf: date, formula, fetchedAt: m.fetchedAt || null, via: 'server', period: { d: 'harian', w: 'mingguan', m: 'bulanan', q: 'kuartalan', a: 'tahunan' }[m.freq] || undefined }, esc(value));
 }
 
 const MacroPage = (() => {
@@ -85,7 +104,7 @@ const MacroPage = (() => {
     };
     $('#curveMeta').textContent = 'data s.d. ' + (ok[ok.length - 1].now.date);
     el.innerHTML = `<div class="svgchart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Kurva imbal hasil obligasi AS">${g}${line('y1', '#7188a3', true)}${line('m1', '#6fb1ff', true)}${line('now', '#e0b15a')}</svg>
-      <div class="lg"><span><i style="background:#e0b15a"></i>Sekarang</span><span><i style="background:#6fb1ff"></i>±1 bulan lalu</span><span><i style="background:#7188a3"></i>±1 tahun lalu</span>${qBadge('eod')}</div></div>
+      <div class="lg"><span><i style="background:#e0b15a"></i>Sekarang</span><span><i style="background:#6fb1ff"></i>±1 bulan lalu</span><span><i style="background:#7188a3"></i>±1 tahun lalu</span>${qBadge(r.stale ? 'stale' : 'eod')}</div></div>
       <table class="dense static"><thead><tr><th>Tenor</th><th class="num">Imbal hasil</th><th class="num">Perubahan 1 hari</th><th class="num">1 bulan</th><th class="num">Durasi mod.</th><th class="num">Konveksitas</th></tr></thead><tbody>
       ${ok.map(p => { const dc = p.yrs >= 1 ? durConv(p.now.value, Math.round(p.yrs)) : { mod: p.yrs / (1 + p.now.value / 100), conv: NaN }; const ch = p.d1 ? Math.round((p.now.value - p.d1.value) * 100) : null, cm = p.m1 ? Math.round((p.now.value - p.m1.value) * 100) : null;   // dalam basis poin, dibulatkan (hindari "-0")
         return `<tr><td>${p.label}</td><td class="num">${fredLin(p.id, 'Imbal hasil ' + p.label, fmt(p.now.value, 2), '%', p.now.date)}</td><td class="num ${sign(ch)}">${ch === null ? '–' : (ch > 0 ? '+' : '') + fmt(ch, 0) + ' bp'}</td><td class="num ${sign(cm)}">${cm === null ? '–' : (cm > 0 ? '+' : '') + fmt(cm, 0) + ' bp'}</td><td class="num">${fmt(dc.mod, 2)}</td><td class="num">${fmt(dc.conv, 1)}</td></tr>`; }).join('')}
@@ -125,7 +144,7 @@ const MacroPage = (() => {
         `<tr><td>${esc(x.label)} <span class="sub">${esc(x.id)}${x.mode === 'yoy' ? ' · YoY dihitung' : ''}</span></td><td class="num">${x.now === null ? '–' : fredLin(x.id, x.label, fmt(x.now, x.unit === 'ribu' ? 0 : 2), x.unit, x.date, x.formula)}</td>
          <td class="num">${x.prev === null ? '–' : fmt(x.prev, x.unit === 'ribu' ? 0 : 2)}</td><td class="num ${sign(x.now - x.prev)}">${x.now === null || x.prev === null ? '–' : (x.now - x.prev > 0 ? '+' : '') + fmt(x.now - x.prev, 2)}</td><td>${esc(x.date)}</td>
          <td class="num c-na" title="Data konsensus/perkiraan ekonom berlisensi; tidak ada sumber gratis resmi">n/a</td></tr>`).join('') +
-      `</tbody></table><div class="src-foot">${qBadge('eod')} FRED · YoY dan perubahan = ${qBadge('calculated')} · "Kejutan makro" (aktual vs konsensus) tidak dihitung karena data konsensus tidak tersedia gratis.</div>`;
+      `</tbody></table><div class="src-foot">${qBadge(r.stale ? 'stale' : 'historical', 'Seri bulanan/kuartalan statistik resmi')} FRED · ${r.fetchedAt ? 'diambil ' + esc(fmtAge(r.fetchedAt)) + ' · ' : ''}YoY dan perubahan = ${qBadge('calculated')} · "Kejutan makro" (aktual vs konsensus) tidak dihitung karena data konsensus tidak tersedia gratis.</div>`;
   }
 
   async function commodities() {
@@ -145,7 +164,7 @@ const MacroPage = (() => {
         <td class="num ${sign(c1)}">${c1 === null ? '–' : fmtPct(c1, 1)}</td><td class="num ${sign(c12)}">${c12 === null ? '–' : fmtPct(c12, 1)}</td><td class="num">${Number.isFinite(vol) ? fmt(vol, 0) + '%' : '–'}</td><td>${esc(L.date)}</td></tr>`;
     }).join('');
     el.innerHTML = `<table class="dense static"><thead><tr><th>Komoditas</th><th class="num">Harga</th><th class="num">1 bln</th><th class="num">1 thn</th><th class="num">Vol. thn</th><th>Data s.d.</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="src-foot">${qBadge('eod')} FRED (EIA, IMF Primary Commodity Prices). Volatilitas = ${qBadge('calculated')} dari 3 bulan terakhir. Emas, perak, litium: tidak tersedia di FRED gratis. Persediaan, produksi, ekspor/impor energi: butuh kunci EIA (belum dipasang).</div>`;
+      <div class="src-foot">${qBadge(r.stale ? 'stale' : 'eod', 'Harian untuk minyak/gas; bulanan (rata-rata) untuk logam & pertanian')} FRED (EIA, IMF Primary Commodity Prices). Volatilitas = ${qBadge('calculated')} dari 3 bulan terakhir. Emas, perak, litium: tidak tersedia di FRED gratis. Persediaan, produksi, ekspor/impor energi: butuh kunci EIA (belum dipasang).</div>`;
   }
 
   async function centralBanks() {
@@ -160,7 +179,7 @@ const MacroPage = (() => {
         let i = s.length - 1; while (i > 0 && s[i - 1].value === last.value) i--;
         const prev = i > 0 ? s[i - 1] : null, changedAt = s[i].period;
         const dir = !prev ? 'stabil' : last.value > prev.value ? 'naik' : 'turun';
-        return `<tr><td>${esc(name)} <span class="sub">${esc(k)}</span></td><td class="num">${Lineage.wrap({ label: 'Suku bunga ' + name, value: fmt(last.value, 2), unit: '%', quality: 'eod', source: 'BIS WS_CBPOL', home: SOURCE_DEFS.bis.home, asOf: last.period, fetchedAt: r.fetchedAt, via: r.via }, fmt(last.value, 2) + '%')}</td>
+        return `<tr><td>${esc(name)} <span class="sub">${esc(k)}</span></td><td class="num">${Lineage.wrap({ label: 'Suku bunga ' + name, value: fmt(last.value, 2), unit: '%', quality: r.stale ? 'stale' : 'historical', source: 'BIS WS_CBPOL', home: SOURCE_DEFS.bis.home, asOf: last.period, fetchedAt: r.fetchedAt, via: r.via }, fmt(last.value, 2) + '%')}</td>
           <td class="num">${prev ? fmt(prev.value, 2) + '%' : '–'}</td><td>${esc(changedAt)}</td><td class="${dir === 'naik' ? 'down' : dir === 'turun' ? 'up' : ''}">${dir}</td><td class="c-na" title="Jadwal rapat tidak tersedia dari API gratis">–</td></tr>`;
       }).join('') + `</tbody></table><div class="src-foot">${srcLine(r, 'data bulanan; pernyataan dan kutipan bank sentral tidak tersedia dari API gratis')}</div>`;
   }
@@ -168,7 +187,7 @@ const MacroPage = (() => {
   async function regimeAndCorr() {
     const ids = [...new Set([...FRED_SETS.regime.map(x => x[0]), ...FRED_SETS.corr.map(x => x[0]), 'BAMLH0A0HYM2', 'T10Y2Y'])];
     const r = await Fred.get(ids, daysAgo(6 * 365));
-    if (!r.ok) { $('#regimeBody').innerHTML = unavailableBox('Mesin rezim pasar', r); $('#corrBody').innerHTML = unavailableBox('Korelasi', r); $('#regimeBadge').innerHTML = qBadge('unavailable'); return; }
+    if (!r.ok) { $('#regimeBody').innerHTML = unavailableBox('Mesin rezim pasar', r); $('#corrBody').innerHTML = unavailableBox('Korelasi', r); $('#analogBody').innerHTML = unavailableBox('Analog historis', r); $('#regimeBadge').innerHTML = qBadge('unavailable'); return; }
     const s = r.series;
     const sp = s.SP500 && s.SP500.data;
     let ma = null;

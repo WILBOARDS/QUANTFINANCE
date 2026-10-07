@@ -13,10 +13,19 @@ const HazardData = (() => {
       if (Net.server) {
         const r = await getData('usgs', { server: '/api/hazards', ttl: 5 * 60e3, key: 'hz' });
         if (r.ok) {
-          const u = r.data.usgs, g = r.data.gdacs;
+          let u = r.data.usgs;
+          const g = r.data.gdacs;
+          /* USGS gagal di server: coba langsung dari browser (USGS mengizinkan CORS) */
+          if (!(u && u.ok)) {
+            const ud = await getData('usgs', { direct: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson', parse: Parsers.parseUsgs, ttl: 5 * 60e3, key: 'usgs' });
+            u = ud.ok ? { ok: true, data: ud.data, via: 'langsung' } : { ok: false, error: (u && u.error || 'gagal') + ' | langsung: ' + ud.error };
+          }
           const items = [...(u && u.ok ? u.data : []), ...(g && g.ok ? g.data : [])];
           return { ...r, items, parts: { usgs: u, gdacs: g } };
         }
+        if (r.cancelled) return r;
+        const ud = await getData('usgs', { direct: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson', parse: Parsers.parseUsgs, ttl: 5 * 60e3, key: 'usgs' });
+        if (ud.ok) return { ...ud, items: ud.data, parts: { usgs: ud, gdacs: { ok: false, error: r.error } } };
         return r;
       }
       const u = await getData('usgs', { direct: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson', parse: Parsers.parseUsgs, ttl: 5 * 60e3, key: 'usgs' });
@@ -99,7 +108,7 @@ const IntelPage = (() => {
       const ramp = ind && ind.good === 'size' ? 'linear-gradient(90deg,#1e3a5a,#6fb1ff)' : 'linear-gradient(90deg,#ff6f61,#2b4560 50%,#34d1a4)';
       parts.push(`<span>${esc(ch.label)}: ${lowTxt}<i class="ramp" style="background:${ramp}"></i>${hiTxt}</span><span><i class="sw" style="background:#1a2c40"></i>tidak ada data</span>`);
       const m = S.metric === 'score' ? null : CountryData.meta[S.metric];
-      if (m && m.ok !== false) parts.push(`<span>${qBadge(m.fallback ? 'historical' : S.metric === 'polstab' || S.metric === 'reservesMonths' ? 'historical' : 'projection')} ${esc(m.sourceName || '')}${m.fetchedAt ? ' · ' + esc(fmtAge(m.fetchedAt)) : ''}</span>`);
+      if (m && m.ok !== false) parts.push(`<span>${qBadge(m.stale ? 'stale' : m.fallback || S.metric === 'polstab' || S.metric === 'reservesMonths' ? 'historical' : 'projection')} ${esc(m.sourceName || '')}${m.fetchedAt ? ' · ' + esc(fmtAge(m.fetchedAt)) : ''}</span>`);
       if (S.metric === 'score') parts.push(`<span>${qBadge('calculated')} skor eksperimental dari IMF + World Bank</span>`);
     }
     if (vis.hazards && S.hz && S.hz.ok) parts.push(`<span><i class="sw" style="background:#f3d79a;border-radius:50%"></i>Gempa M4,5+ (USGS)</span><span><i class="sw" style="background:#ff9f6b"></i>GDACS</span>`);
@@ -118,7 +127,8 @@ const IntelPage = (() => {
     setStatus('hazards', 'loading');
     const r = await HazardData.load();
     S.hz = r;
-    if (r.ok) { S.globe.set('hazards', r.items); setStatus('hazards', r.stale ? 'stale' : 'ok', r.items.length + ' peristiwa'); }
+    const partStale = r.parts && [r.parts.usgs, r.parts.gdacs].some(p => p && p.ok && p.stale);
+    if (r.ok) { S.globe.set('hazards', r.items); setStatus('hazards', r.stale || partStale ? 'stale' : 'ok', r.items.length + ' peristiwa' + (partStale ? ' (sebagian salinan lama)' : '')); }
     else setStatus('hazards', 'na', r.error);
     feed(); legend();
   }
@@ -138,6 +148,12 @@ const IntelPage = (() => {
       S.globe.set('ships', r.vessels); if (r.boxes) S.globe.set('boxes', Object.values(r.boxes));
       setStatus('ships', r.vessels.length ? 'ok' : 'na', r.vessels.length ? r.vessels.length + ' kapal' : 'Belum ada posisi AIS');
     } else { S.globe.set('ships', []); setStatus('ships', 'na', 'Data AIS live tidak tersedia: ' + r.error); }
+    /* panel kapal terpilih ikut diperbarui; bila kapal hilang atau data gagal, labelnya Basi */
+    if (S.sel && S.sel.type === 'ship' && $('#intelSide')) {
+      const fresh = r.ok ? r.vessels.find(x => x.mmsi === S.sel.item.mmsi) : null;
+      if (fresh) S.sel = { ...S.sel, item: fresh };
+      $('#intelSide').innerHTML = shipPanel(S.sel.item, fresh && !r.stale ? undefined : 'stale');
+    }
   }
   async function loadChoke() {
     setStatus('chokepoints', 'loading');
@@ -228,7 +244,11 @@ const IntelPage = (() => {
       if (!r) { el.innerHTML = '<p class="loading">Memuat bencana</p>'; return; }
       if (!r.ok) { el.innerHTML = unavailableBox('Bencana', r); meta.textContent = ''; return; }
       const items = [...r.items].sort((a, b) => (b.time || '').localeCompare(a.time || '')).slice(0, 80);
-      meta.innerHTML = `${items.length} terbaru · ${esc(r.parts && r.parts.gdacs && !r.parts.gdacs.ok ? 'GDACS: ' + (r.parts.gdacs.error || 'gagal') : 'USGS + GDACS')}`;
+      /* sebutkan sumber yang gagal; jangan menulis "USGS + GDACS" kalau salah satunya tidak ada */
+      const pu = r.parts && r.parts.usgs, pg = r.parts && r.parts.gdacs;
+      const srcTxt = [pu && pu.ok ? 'USGS' + (pu.stale ? ' (salinan lama)' : '') : 'USGS gagal: ' + ((pu && pu.error) || '?'), pg && pg.ok ? 'GDACS' + (pg.stale ? ' (salinan lama)' : '') : 'GDACS gagal: ' + ((pg && pg.error) || '?')].join(' · ');
+      meta.innerHTML = `${items.length} terbaru · ${esc(String(srcTxt).slice(0, 220))}`;
+      if (!items.length) { el.innerHTML = '<p class="hint" style="padding:12px 14px">Tidak ada peristiwa dalam data yang berhasil dimuat.</p>'; el._items = []; return; }
       el.innerHTML = items.map((z, i) => `<button type="button" class="feed-row" data-hz="${i}"><span class="t">${esc(fmtTime(z.time))}</span><span class="w">${esc(HAZ_LABEL[z.kind] || z.kind)}${z.mag ? ' M' + fmt(z.mag, 1) : ''} · ${esc(z.title)}</span><span class="s">${esc(z.alert || z.source)}</span></button>`).join('');
       el._items = items;
     } else if (S.feed === 'news') {
@@ -254,7 +274,7 @@ const IntelPage = (() => {
   function build() {
     if (built) return;
     built = true;
-    S.globe = createGlobe($('#intelGlobe'), { visible: vis, onPick: h => side(h), label: 'Globe intelijen: ekonomi, pasar, berita, bencana, kapal' });
+    S.globe = createGlobe($('#intelGlobe'), { onAuto: on => { const b = $('#page-intel [data-g="spin"]'); if (b) b.setAttribute('aria-pressed', String(on)); }, visible: vis, onPick: h => side(h), label: 'Globe intelijen: ekonomi, pasar, berita, bencana, kapal' });
     chips(); metricOptions(); side(null);
     $('#layerChips').addEventListener('click', e => {
       const b = e.target.closest('[data-l]'); if (!b) return;
@@ -309,6 +329,11 @@ const IntelPage = (() => {
     },
     hide() { clearInterval(S.shipTimer); },
     get globe() { return S.globe; },
+    /* dipakai palet perintah: ganti metrik warna globe tanpa memuat ulang halaman */
+    setMetric(key) {
+      S.metric = key; Store.set('intelMetric', key);
+      if (S.globe) { metricOptions(); choropleth(); }
+    },
     focusCountry(iso3) {
       build();
       const ll = countryCentroid(iso3);

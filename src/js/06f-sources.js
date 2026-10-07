@@ -4,7 +4,7 @@
    latensi, update terakhir, jumlah permintaan, cache, error terakhir, cadangan.
    ===================================================================== */
 const SourcesPage = (() => {
-  let built = false, srvProviders = null, tmr = null;
+  let built = false, srvProviders = null, tmr = null, tmr2 = null;
   const STATUS = { ok: ['Tersambung', 'up'], degraded: ['Menurun', ''], down: ['Gagal', 'down'], idle: ['Belum dipakai', ''], unconfigured: ['Belum dikonfigurasi', ''] };
   const dot = s => `<span class="st-dot" data-s="${esc(s)}"></span>`;
 
@@ -18,7 +18,8 @@ const SourcesPage = (() => {
         <p class="hint">Nilai kunci tidak pernah dikirim ke browser; server hanya memberi tahu ada atau tidak.</p>`;
     } else {
       el.innerHTML = `<p class="lead">${dot('down')} <b>Server lokal tidak terdeteksi.</b> Aplikasi tetap jalan memakai sumber tanpa kunci yang mengizinkan akses langsung dari browser (World Bank, kripto, gempa USGS, kurs). Beberapa sumber hanya bisa lewat server: FRED, BIS, GDACS, kapal global (AISStream), saham (Finnhub).</p>
-        <ol class="chain"><li>Pasang Node.js versi 22 atau lebih baru (nodejs.org, pilih LTS).</li><li>Di folder proyek: <code>npm install</code> lalu <code>npm run build</code>.</li><li>Salin <code>.env.example</code> menjadi <code>.env</code>, isi kunci yang kamu punya (boleh kosong).</li><li>Jalankan <code>npm start</code>, lalu buka <code>http://localhost:8787</code>.</li></ol>`;
+        <ol class="chain"><li>Pasang Node.js versi 22 atau lebih baru (nodejs.org, pilih LTS).</li><li>Di folder proyek: <code>npm ci</code> lalu <code>npm run build</code>.</li><li>Salin <code>.env.example</code> menjadi <code>.env</code>, isi kunci yang kamu punya (boleh kosong).</li><li>Jalankan <code>npm start</code>, lalu buka <code>http://localhost:8787</code>.</li></ol>` +
+        (location.protocol === 'file:' ? `<p class="hint"><b>Halaman ini dibuka sebagai file.</b> Demi keamanan, server tidak melayani halaman file:// (situs lain bisa menyamar dengan asal yang sama, "null"). Kalau server sudah jalan, buka <a href="http://localhost:8787" target="_blank" rel="noopener noreferrer">http://localhost:8787</a>. Bila tetap ingin file://, set <code>ALLOW_FILE_ORIGIN=1</code> di .env dan pahami risikonya.</p>` : '');
     }
   }
   function merged() {
@@ -77,7 +78,14 @@ const SourcesPage = (() => {
     if (!Net.server) { srvProviders = null; return; }
     try { const r = await Net.fetch(Net.server.base + '/api/providers', { timeout: 4000 }); srvProviders = r.providers; } catch { srvProviders = null; }
   }
-  function render() { serverBox(); providers(); health(); }
+  /* log error internal: semua kegagalan jaringan, penyedia, parser, tampilan, perintah */
+  function errLog() {
+    const L = ErrorLog.list();
+    $('#errLogMeta').textContent = L.length ? `${ErrorLog.count()} kejadian, ${L.length} jenis pesan (di memori browser ini saja)` : 'belum ada kejadian';
+    $('#errLog').innerHTML = L.length ? `<table class="dense"><thead><tr><th>Waktu</th><th>Jenis</th><th class="num">Kali</th><th>Pesan</th></tr></thead><tbody>${L.map(e => `<tr><td class="num">${esc(fmtTime(e.lastAt))}</td><td>${esc(ErrorLog.KINDS[e.kind] || e.kind)}</td><td class="num">${e.count}</td><td class="wrap">${esc(e.message)}${e.detail ? `<span class="sub">${esc(e.detail.split('\n')[0])}</span>` : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="hint" style="padding:12px 14px">Tidak ada error tercatat sejak halaman dibuka.</p>';
+  }
+  function render() { serverBox(); providers(); health(); errLog(); }
   return {
     async show() {
       await Net.ready();
@@ -87,6 +95,9 @@ const SourcesPage = (() => {
         $('#srvRetry').addEventListener('click', async () => { await Net.detect(); await refreshServer(); render(); });
         $('#provExport').addEventListener('click', () => download('sumber-data.json', JSON.stringify({ exportedAt: new Date().toISOString(), server: Net.server ? Net.server.base : null, providers: merged() }, null, 2), 'application/json'));
         bus.on('sources', () => { if (!$('#page-sources').hidden) { clearTimeout(tmr); tmr = setTimeout(() => { providers(); health(); }, 400); } });
+        bus.on('errorlog', () => { if (!$('#page-sources').hidden) { clearTimeout(tmr2); tmr2 = setTimeout(errLog, 300); } });
+        $('#errLogClear').addEventListener('click', () => { ErrorLog.clear(); errLog(); });
+        $('#errLogExport').addEventListener('click', () => download('log-error.json', JSON.stringify({ exportedAt: new Date().toISOString(), entries: ErrorLog.list() }, null, 2), 'application/json'));
       }
       await refreshServer();
       render();

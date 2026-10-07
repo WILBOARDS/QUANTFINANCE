@@ -24,19 +24,15 @@
     </svg>
     <span>QuantTerminal</span>
   </div>
-  <nav class="nav" aria-label="Halaman">
-    <button type="button" data-page="market" aria-current="page">Pasar</button>
-    <button type="button" data-page="intel"><span class="long">Intel 3D</span><span class="short">Intel</span></button>
-    <button type="button" data-page="country">Negara</button>
-    <button type="button" data-page="news">Berita</button>
-    <button type="button" data-page="ships">Kapal</button>
-    <button type="button" data-page="macro">Makro</button>
-    <button type="button" data-page="cash"><span class="long">Kas dan alokasi</span><span class="short">Kas</span></button>
-    <button type="button" data-page="sources"><span class="long">Sumber data</span><span class="short">Sumber</span></button>
-    <button type="button" data-page="about"><span class="long">Metodologi</span><span class="short">Metode</span></button>
-  </nav>
+  <div class="cmdbar" id="cmdBar" role="search">
+    <button type="button" class="cmd-icon" id="btnCmd" aria-label="Fokus ke bilah perintah (Ctrl+K)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+    <input id="cmdInput" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdDrop" aria-label="Cari aset atau ketik perintah, contoh AAPL GP" placeholder="Cari atau perintah: AAPL GP · ID ECON · WATCH AAPL · HELP" autocomplete="off" spellcheck="false">
+    <kbd class="cmd-kbd">Ctrl K</kbd>
+    <div class="cmd-drop" id="cmdDrop" role="listbox" aria-label="Saran" hidden></div>
+  </div>
   <div class="top-right">
-    <button type="button" class="cmd-btn" id="btnCmd" aria-label="Buka pencarian dan perintah (Ctrl+K)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="long">Cari atau perintah</span><kbd>Ctrl K</kbd></button>
+    <button type="button" class="chip" id="mktChip" title="Status bursa"><i class="dot"></i><span id="mktText">Bursa</span></button>
+    <button type="button" class="chip" id="errChip" data-state="ok" title="Log error internal (klik untuk melihat)" hidden><i class="dot"></i><span id="errText">0</span></button>
     <button type="button" class="chip" id="srvChip" data-state="off" title="Status server lokal"><i class="dot"></i><span id="srvText">Memeriksa server</span></button>
     <span class="chip" id="modeChip" data-state="sim" title="Sumber data saat ini"><i class="dot"></i><span id="modeText">Data simulasi</span></span>
     <time class="clock" id="clock"></time>
@@ -46,8 +42,33 @@
   </div>
 </header>
 
-<div class="tape" aria-hidden="true"><div class="tape-track" id="tapeTrack"></div></div>
+<div class="tape" aria-hidden="true" inert><div class="tape-track" id="tapeTrack"></div></div>
 
+<div class="shell">
+  <nav class="side-nav" aria-label="Halaman">
+    <div class="side-group" data-group="pasar"><span class="sg">Pasar</span>
+      <button type="button" data-page="market" aria-current="page" title="Pasar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span class="sl">Pasar</span><span class="ss">Pasar</span></button>
+      <button type="button" data-page="watchlist" title="Watchlist"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg><span class="sl">Watchlist</span><span class="ss">Watchlist</span></button>
+      <button type="button" data-page="alerts" title="Alert"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="sl">Alert</span><span class="ss">Alert</span></button>
+    </div>
+    <div class="side-group" data-group="riset"><span class="sg">Riset</span>
+      <button type="button" data-page="news" title="Berita"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg><span class="sl">Berita</span><span class="ss">Berita</span></button>
+      <button type="button" data-page="macro" title="Makro"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17l5-6 4 3 6-8 3 3"/></svg><span class="sl">Makro</span><span class="ss">Makro</span></button>
+      <button type="button" data-page="country" title="Negara"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span class="sl">Negara</span><span class="ss">Negara</span></button>
+    </div>
+    <div class="side-group" data-group="intel"><span class="sg">Maritim &amp; intel</span>
+      <button type="button" data-page="intel" title="Intel 3D"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><circle cx="15" cy="9" r="1.5"/></svg><span class="sl">Intel 3D</span><span class="ss">Intel</span></button>
+      <button type="button" data-page="ships" title="Kapal"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 16l2 4h14l2-4H3z"/><path d="M12 4v12M8 8h8"/></svg><span class="sl">Kapal</span><span class="ss">Kapal</span></button>
+    </div>
+    <div class="side-group" data-group="portofolio"><span class="sg">Portofolio</span>
+      <button type="button" data-page="cash" title="Kas dan alokasi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span class="sl">Kas dan alokasi</span><span class="ss">Kas</span></button>
+    </div>
+    <div class="side-group" data-group="sistem"><span class="sg">Sistem</span>
+      <button type="button" data-page="sources" title="Sumber data"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="sl">Sumber data</span><span class="ss">Sumber</span></button>
+      <button type="button" data-page="about" title="Metodologi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span class="sl">Metodologi</span><span class="ss">Metode</span></button>
+    </div>
+    <div class="side-foot" id="panelHidden" hidden></div>
+  </nav>
 <main id="main">
 
   <!-- ============ HALAMAN: PASAR ============ -->
@@ -254,7 +275,7 @@
     <section class="card cb-card" aria-label="Bank sentral"><div class="card-head"><h2>Bank sentral</h2><span class="meta">suku bunga kebijakan, BIS</span></div><div class="table-wrap" id="cbBody"></div></section>
     <section class="card corr-card" aria-label="Matriks korelasi"><div class="card-head"><h2>Korelasi lintas aset</h2>
       <div class="seg" id="corrSeg" role="group" aria-label="Jangka waktu korelasi">
-        <button type="button" data-tf="21">1M</button><button type="button" data-tf="63">3M</button><button type="button" data-tf="126" aria-pressed="true">6M</button><button type="button" data-tf="252">1Y</button><button type="button" data-tf="756">3Y</button><button type="button" data-tf="1260">5Y</button>
+        <button type="button" data-tf="21" aria-pressed="false">1M</button><button type="button" data-tf="63" aria-pressed="false">3M</button><button type="button" data-tf="126" aria-pressed="true">6M</button><button type="button" data-tf="252" aria-pressed="false">1Y</button><button type="button" data-tf="756" aria-pressed="false">3Y</button><button type="button" data-tf="1260" aria-pressed="false">5Y</button>
       </div></div><div class="side-body" id="corrBody"></div></section>
     <section class="card stress-card" aria-label="Uji tekanan portofolio"><div class="card-head"><h2>Uji tekanan portofolio simulasi</h2><span class="flag">Edukasi</span></div><div class="side-body" id="stressBody"></div></section>
   </section>
@@ -300,7 +321,7 @@
         </div>
       </section>
 
-      <div class="cash-out" id="cashOut" aria-live="polite"></div>
+      <div class="cash-out" id="cashOut"></div>
     </div>
   </section>
 
@@ -309,9 +330,12 @@
     <section class="card" aria-label="Server lokal"><div class="card-head"><h2>Server lokal</h2><span class="spacer"></span><button type="button" class="mini-btn" id="srvRetry">Cek ulang</button></div><div class="side-body" id="srvBody"></div></section>
     <section class="card" aria-label="Penyedia data"><div class="card-head"><h2>Penyedia data</h2><span class="meta" id="provMeta"></span><span class="spacer"></span><button type="button" class="mini-btn" id="provExport">JSON</button></div><div class="table-wrap" id="provBody"></div></section>
     <section class="card" aria-label="Kesehatan data"><div class="card-head"><h2>Kesehatan data</h2><span class="meta">kesegaran setiap kumpulan data yang sudah dimuat</span></div><div class="table-wrap" id="healthData"></div></section>
+    <section class="card errlog-card" id="errLogCard" aria-label="Log error internal"><div class="card-head"><h2>Log error internal</h2><span class="meta" id="errLogMeta"></span><span class="spacer"></span><button type="button" class="mini-btn" id="errLogExport">JSON</button><button type="button" class="mini-btn" id="errLogClear">Kosongkan</button></div><div class="table-wrap" id="errLog"></div></section>
   </section>
 
   <!-- ============ HALAMAN: METODOLOGI ============ -->
+  <!--__PAGES__-->
+
   <section id="page-about" class="page about" hidden>
     <article class="card prose">
       <h1>Cara kerja dan batasannya</h1>
@@ -324,8 +348,9 @@
 
       <h2>Yang perlu kamu tahu tentang datanya</h2>
       <ul>
-        <li><strong>Harga saham, indeks, dan angka keuangan di versi ini adalah simulasi.</strong> Dibuat oleh generator acak supaya tampilan bisa dicoba tanpa server. Jangan gunakan untuk menilai perusahaan sungguhan.</li>
-        <li>Harga kripto (BTC, ETH, SOL, BNB) bisa live dari API publik Binance. Kalau berhasil, lencana di pojok kanan atas berubah menjadi hijau.</li>
+        <li><strong>Tanpa Mode Demo, tidak ada angka buatan.</strong> Harga saham dan indeks hanya tampil bila sumber nyata tersedia (Finnhub dengan kunci, FRED, atau Yahoo tidak resmi yang kamu aktifkan di server). Kalau tidak ada, tertulis "Tidak tersedia".</li>
+        <li><strong>Mode Demo</strong> (Pengaturan) mengisi aset tanpa sumber nyata dengan angka acak berlabel "Simulasi". Jangan gunakan angka itu untuk menilai perusahaan sungguhan.</li>
+        <li>Harga kripto berasal dari Binance (publik, tanpa kunci), cadangannya CoinGecko (tertunda). Bila sumber berhenti mengirim data, label berubah menjadi "Basi"; bila semuanya gagal, "Tidak tersedia".</li>
         <li>Jam buka bursa dihitung dari zona waktu dan jadwal reguler. Hari libur bursa tidak diperhitungkan.</li>
         <li>Bayangan malam di peta dihitung dari posisi matahari saat ini.</li>
         <li>Skor fundamental bukan prediksi harga. Tidak ada valuasi, berita, atau faktor makro di dalamnya.</li>
@@ -350,12 +375,13 @@
     </article>
   </section>
 </main>
+</div>
 
 <dialog id="settings" aria-labelledby="setTitle">
   <form method="dialog" class="dlg">
     <h2 id="setTitle">Pengaturan</h2>
     <label class="check"><input type="checkbox" id="setLive" checked>
-      <span><strong>Harga kripto live dari Binance</strong><br><small>Browser kamu menghubungi api.binance.com secara langsung, tanpa kunci API. Kalau gagal, kripto kembali ke simulasi.</small></span></label>
+      <span><strong>Harga kripto live dari Binance</strong><br><small>Browser kamu menghubungi api.binance.com secara langsung, tanpa kunci API. Kalau gagal, dicoba cermin data-api.binance.vision lalu CoinGecko (tertunda); bila semua gagal, harga ditandai "Tidak tersedia", bukan disimulasikan.</small></span></label>
     <label class="check"><input type="checkbox" id="setDemo">
       <span><strong>Mode demo (harga simulasi)</strong><br><small>Saham dan indeks tanpa sumber nyata diisi angka acak supaya tampilan hidup. Semua angka simulasi diberi label. Bawaan: mati, sesuai aturan "jangan memalsukan data". Halaman dimuat ulang saat diubah.</small></span></label>
     <label class="check"><input type="checkbox" id="setForce">
@@ -371,13 +397,6 @@
 <div id="toasts" role="status" aria-live="polite"></div>
 <div class="lin-pop" id="linPop" role="dialog" aria-label="Asal-usul data" hidden></div>
 
-<dialog id="cmdk" class="cmdk" aria-label="Pencarian dan perintah">
-  <div class="cmdk-box">
-    <input id="cmdkInput" type="text" placeholder="Ketik: AAPL, BTC, Indonesia, OIL, US10Y, SHIP HORMUZ, N RUPIAH, COMPARE ID US CN, Jensen Huang" autocomplete="off" spellcheck="false" aria-label="Perintah">
-    <div class="cmdk-list" id="cmdkList" role="listbox"></div>
-    <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> pilih</span><span><kbd>Enter</kbd> buka</span><span><kbd>Esc</kbd> tutup</span><span class="spacer"></span><span>Ketik <b>HELP</b> untuk daftar perintah</span></div>
-  </div>
-</dialog>
 <footer class="credit">Grafik oleh <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Peta dari Natural Earth. Kurs <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a>. Data kapal Baltik © Fintraffic / digitraffic.fi, CC BY 4.0. Bukan nasihat investasi.</footer>
 
 <script>

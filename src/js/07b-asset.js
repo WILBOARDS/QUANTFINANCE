@@ -8,7 +8,10 @@
    ===================================================================== */
 const AssetPanel = (() => {
   let cur = null, tab = Store.get('assetTab', 'why'), seq = 0;
-  const isUS = i => i.type === 'stock' && US_STOCKS.includes(i.sym) && i.sym !== 'VALE';
+  /* my = nomor urut render panel Pasar, ATAU fungsi alive() dari halaman detail aset */
+  const live = my => (typeof my === 'function' ? my() : my === seq);
+  /* saham AS yang punya kode Finnhub: daftar Pasar ATAU entitas katalog (i.finnhub) */
+  const isUS = i => (i.type === 'stock' || i.type === 'etf') && i.sym !== 'VALE' && (US_STOCKS.includes(i.sym) || (!!i.finnhub && i.mkt === 'US'));
   const hasFinnhub = () => !!(Net.server && Net.server.health.keys.finnhub);
 
   function tabsFor(i) {
@@ -31,16 +34,18 @@ const AssetPanel = (() => {
     el.innerHTML = '<p class="loading">Mengumpulkan bukti</p>';
     const ev = [];
     const p = pct(i);
+    /* mode demo: harga simulasi tidak boleh dipakai sebagai bukti analisis yang tampak nyata */
+    const simP = !i.real || i.quality === 'sim';
     const h = await MarketData.history(i, '6M');
-    if (my !== seq) return;
+    if (!live(my)) return;
     const bars = h && h.bars ? h.bars : [];
     const closes = bars.map(b => b.close);
     const rets = Analytics.returns(closes);
     const sd = Analytics.stdev(rets.slice(-60));
     if (Number.isFinite(p) && Number.isFinite(sd) && sd > 0) {
       const z = p / sd;
-      ev.push({ w: Math.min(Math.abs(z) / 3, 1), label: 'Besar pergerakan', txt: `Hari ini ${fmtPct(p)} = ${fmt(z, 1)}× volatilitas harian biasa (σ ${fmtPct(sd)} dari 60 hari). ${Math.abs(z) >= 2 ? 'Tidak biasa.' : Math.abs(z) >= 1 ? 'Agak besar.' : 'Masih dalam kisaran normal.'}`, src: h.source, q: 'calculated' });
-    } else ev.push({ w: 0, label: 'Besar pergerakan', txt: Number.isFinite(p) ? `Hari ini ${fmtPct(p)}; riwayat untuk membandingkan volatilitas tidak tersedia.` : 'Harga hari ini tidak tersedia.', src: '', q: 'unavailable' });
+      ev.push({ w: Math.min(Math.abs(z) / 3, 1), label: 'Besar pergerakan', txt: `Perubahan (${chgBasis(i)}) ${fmtPct(p)} = ${fmt(z, 1)}× volatilitas harian biasa (σ ${fmtPct(sd)} dari 60 hari). ${Math.abs(z) >= 2 ? 'Tidak biasa.' : Math.abs(z) >= 1 ? 'Agak besar.' : 'Masih dalam kisaran normal.'}`, src: simP ? h.source + ' vs harga simulasi (mode demo)' : h.source, q: simP ? 'sim' : 'calculated' });
+    } else ev.push({ w: 0, label: 'Besar pergerakan', txt: Number.isFinite(p) ? `Perubahan (${chgBasis(i)}) ${fmtPct(p)}; riwayat untuk membandingkan volatilitas tidak tersedia.` : 'Harga hari ini tidak tersedia.', src: '', q: 'unavailable' });
     const vols = bars.map(b => b.volume).filter(v => v > 0);
     if (vols.length > 21 && Number.isFinite(i.volume) && i.volume > 0) {
       const avg = vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20;
@@ -49,19 +54,23 @@ const AssetPanel = (() => {
     } else ev.push({ w: 0, label: 'Volume', txt: 'Data volume historis tidak tersedia untuk sumber ini.', q: 'unavailable' });
     /* konteks pasar */
     const bench = i.type === 'crypto' ? BY.BTC : BY[(INDEX_DEFS.find(d => d[2] === i.mkt) || [])[0]];
-    if (bench && bench !== i && Number.isFinite(pct(bench)) && Number.isFinite(p)) {
+    /* dibandingkan hanya bila keduanya data sesi yang sama (bukan penutupan FRED beberapa hari lalu vs harga live) */
+    if (bench && bench !== i && Number.isFinite(pct(bench)) && Number.isFinite(p) && comparableMove(i, bench)) {
       const rel = p - pct(bench);
       ev.push({ w: Math.min(Math.abs(rel) / Math.max(sd || 0.01, 0.005) / 3, 1), label: 'Dibanding pasar', txt: `${bench.name} ${fmtPct(pct(bench))}; selisih ${fmtPct(rel)}. ${Math.abs(rel) < Math.abs(p) / 2 ? 'Sebagian besar gerak searah pasar (faktor pasar/makro).' : 'Bergerak berbeda dari pasar: kemungkinan faktor spesifik aset.'}`, src: bench.srcName, q: 'calculated' });
-    } else ev.push({ w: 0, label: 'Dibanding pasar', txt: 'Harga pembanding pasar tidak tersedia.', q: 'unavailable' });
+    } else ev.push({ w: 0, label: 'Dibanding pasar', txt: bench && bench.real && !comparableMove(i, bench) ? `Tidak dibandingkan: data ${bench.name} (${chgBasis(bench)}) bukan dari sesi yang sama dengan harga aset ini.` : 'Harga pembanding pasar tidak tersedia.', q: 'unavailable' });
     /* berita */
     const nm = i.type === 'index' ? i.name : i.name.split(' ')[0] === 'Bank' ? i.name : i.name.split(' ').slice(0, 2).join(' ');
     const query = `"${nm.replace(/[^\w\s&.-]/g, '')}" sourcelang:english`;
+    /* GDELT dibatasi 1 permintaan per ~5 detik: tunggu sebentar supaya menelusuri daftar dengan
+       panah tidak mengantrekan puluhan permintaan yang hasilnya tidak akan dipakai */
+    if (!(isUS(i) && hasFinnhub())) { await new Promise(r => setTimeout(r, 600)); if (!live(my)) return; }
     const n = isUS(i) && hasFinnhub() ? await finn('news', i.sym) : await getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query, mode: 'artlist', timespan: '24h', maxrecords: '50', sort: 'DateDesc' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + new URLSearchParams({ query, mode: 'artlist', format: 'json', timespan: '24h', maxrecords: '50', sort: 'DateDesc' }),
-      parse: Parsers.parseGdeltArticles, ttl: 20 * 60e3, persist: true, key: 'gda:' + i.sym,
+      parse: Parsers.parseGdeltArticles, ttl: 20 * 60e3, persist: true, key: 'gda:' + i.sym, alive: () => live(my),
     });
-    if (my !== seq) return;
+    if (!live(my)) return;
     let news = [];
     if (n.ok) {
       const sum = Analytics.summarizeNews(n.data.filter(a => !a.seen || Date.now() - Date.parse(a.seen) < 36 * 3600e3));
@@ -79,13 +88,13 @@ const AssetPanel = (() => {
       if (ins.ok) smart = Parsers.insiderSignal(ins.data);
     }
     const vr = vols.length > 21 ? vols[vols.length - 1] / (vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20) : null;
-    const pv = Number.isFinite(p) && vr ? (p > 0 && vr > 1.3 ? 'naik dengan volume tinggi' : p < 0 && vr > 1.3 ? 'turun dengan volume tinggi' : vr < 0.8 ? 'gerak dengan volume tipis' : 'netral') : null;
+    const pv = Number.isFinite(p) && !simP && vr ? (p > 0 && vr > 1.3 ? 'naik dengan volume tinggi' : p < 0 && vr > 1.3 ? 'turun dengan volume tinggi' : vr < 0.8 ? 'gerak dengan volume tipis' : 'netral') : null;
     let proxy = 'Tidak diketahui';
     const votes = [];
     if (pv === 'naik dengan volume tinggi') votes.push(1); if (pv === 'turun dengan volume tinggi') votes.push(-1);
     if (smart && smart.label === 'Membeli') votes.push(1); if (smart && smart.label === 'Menjual') votes.push(-1);
     if (votes.length) { const s = votes.reduce((a, b) => a + b, 0); proxy = s > 0 ? 'Akumulasi' : s < 0 ? 'Distribusi' : 'Netral'; } else if (pv) proxy = 'Netral';
-    if (my !== seq) return;
+    if (!live(my)) return;
     el.innerHTML = `<div><h3>Pendorong teratas ${qBadge('calculated')}</h3><ol class="chain">${ev.slice(0, 5).map(e => `<li><b>${esc(e.label)}</b> ${qBadge(e.q)}<br><span style="color:var(--ink-2)">${esc(e.txt)}</span>${e.src ? `<span class="sub" style="display:block;color:var(--ink-3);font-size:10.5px">Sumber: ${esc(e.src)}</span>` : ''}</li>`).join('')}</ol></div>
       ${news.length ? `<div><h3>Judul paling relevan</h3><div class="list">${news.map(a => `<div><a class="item-title" href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a><div class="item-meta"><span>${esc(a.domain)}</span><span>${esc(fmtAge(a.seen))}</span><span>dampak ${a.a.impact}</span></div></div>`).join('')}</div></div>` : ''}
       <div><h3>Proksi smart money ${qBadge('proxy')}</h3><p class="lead"><b>${esc(proxy)}</b>. Bukti: ${pv ? 'harga ' + esc(pv) + (vr ? ` (volume ${fmt(vr, 2)}× rata-rata)` : '') : 'volume tidak tersedia'}${smart ? `; insider 180 hari: ${esc(smart.label)} (${smart.buys} beli, ${smart.sells} jual di pasar)` : i.type === 'stock' ? '; data insider tidak tersedia' : ''}. Kepemilikan institusi (13F), arus ETF, dark pool: tidak tersedia dari sumber gratis yang terpasang.</p></div>
@@ -97,7 +106,7 @@ const AssetPanel = (() => {
     if (!isUS(i) || !hasFinnhub()) { el.innerHTML = needFinnhub(i); return; }
     el.innerHTML = '<p class="loading">Finnhub</p>';
     const [m, pr, rec] = await Promise.all([finn('metric', i.sym), finn('profile', i.sym), finn('recommendation', i.sym)]);
-    if (my !== seq) return;
+    if (!live(my)) return;
     if (!m.ok) { el.innerHTML = unavailableBox('Fundamental', m); return; }
     const d = m.data;
     const F = [['P/E (TTM)', d.pe, 'x', 'peTTM'], ['P/B', d.pb, 'x', 'pbQuarterly'], ['P/S (TTM)', d.ps, 'x', 'psTTM'], ['EPS (TTM)', d.eps, 'USD', 'epsTTM'], ['ROE (TTM)', d.roe, '%', 'roeTTM'], ['ROA (TTM)', d.roa, '%', 'roaTTM'],
@@ -108,27 +117,27 @@ const AssetPanel = (() => {
     const r0 = rec.ok && rec.data[0];
     el.innerHTML = `${p ? `<p class="lead">${esc(p.name)} · ${esc(p.industry || '')} · ${esc(p.exchange || '')} · IPO ${esc(p.ipo || '–')}</p>` : ''}
       <dl class="kv three">${F.map(([l, v, u, k]) => `<div><dt>${esc(l)}</dt><dd>${v === null || v === undefined ? '<span class="na">–</span>' : Lineage.wrap({ label: l + ' ' + i.sym, value: fmt(v, Math.abs(v) >= 1000 ? 0 : 2), unit: u, quality: m.stale ? 'stale' : 'delayed', source: 'Finnhub /stock/metric · ' + k, home: 'https://finnhub.io/docs/api/company-basic-financials', url: m.sourceUrl, asOf: 'TTM/kuartal terakhir', fetchedAt: m.fetchedAt, via: m.via, note: 'Dihitung Finnhub dari laporan keuangan; periksa laporan resmi (10-K/10-Q) untuk verifikasi.' }, fmt(v, Math.abs(v) >= 1000 ? 0 : 2))}</dd><small>${esc(u)}</small></div>`).join('')}</dl>
-      ${r0 ? `<p class="lead">Rekomendasi analis (${esc(r0.period)}): beli kuat ${r0.strongBuy}, beli ${r0.buy}, tahan ${r0.hold}, jual ${r0.sell}, jual kuat ${r0.strongSell}. ${qBadge('delayed')}</p>` : ''}
+      ${r0 ? `<p class="lead">Rekomendasi analis (${esc(r0.period)}): ${[['beli kuat', r0.strongBuy], ['beli', r0.buy], ['tahan', r0.hold], ['jual', r0.sell], ['jual kuat', r0.strongSell]].map(([k, v]) => k + ' ' + (Number.isFinite(+v) ? String(+v) : '–')).join(', ')}. ${qBadge('delayed')}</p>` : ''}
       <p class="hint">Forward P/E, EBITDA, ROIC, riwayat valuasi, kepemilikan institusi: tidak tersedia di paket gratis Finnhub. ${srcLine(m)}</p>`;
   }
   async function insider(i, el, my) {
     if (!isUS(i) || !hasFinnhub()) { el.innerHTML = needFinnhub(i); return; }
     el.innerHTML = '<p class="loading">Finnhub Form 4</p>';
     const r = await finn('insider', i.sym);
-    if (my !== seq) return;
+    if (!live(my)) return;
     if (!r.ok) { el.innerHTML = unavailableBox('Transaksi insider', r); return; }
     const sig = Parsers.insiderSignal(r.data);
     const CODE = { P: 'Beli di pasar', S: 'Jual di pasar', A: 'Hibah/penghargaan', M: 'Eksekusi opsi', F: 'Bayar pajak dgn saham', G: 'Hadiah', D: 'Dijual ke emiten', C: 'Konversi' };
-    el.innerHTML = `<div class="bigscore"><strong style="font-family:var(--font-ui);font-size:20px">${esc(sig.label)}</strong><span class="meta">180 hari: beli ${sig.buys}× (${fmtCompact(sig.buyValue)} USD), jual ${sig.sells}× (${fmtCompact(sig.sellValue)} USD) ${qBadge('calculated')}</span></div>
+    el.innerHTML = `<div class="bigscore"><strong style="font-family:var(--font-ui);font-size:20px">${esc(sig.label)}</strong><span class="meta">180 hari: beli ${sig.buys}× (${fmtCompact(sig.buyValue)} USD), jual ${sig.sells}× (${fmtCompact(sig.sellValue)} USD) ${qBadge('calculated')}${r.stale ? ' ' + qBadge('stale') + ' salinan lama, sumber gagal' : ''}</span></div>
       <div class="table-wrap" style="max-height:260px"><table class="dense static"><thead><tr><th>Orang dalam</th><th>Tanggal</th><th>Jenis</th><th class="num">Perubahan</th><th class="num">Harga</th><th class="num">Kepemilikan</th></tr></thead><tbody>
       ${r.data.slice(0, 60).map(x => `<tr><td>${esc(x.name)}</td><td>${esc(x.date || '')}</td><td title="${esc(x.code)}">${esc(CODE[x.code] || x.code)}</td><td class="num ${sign(x.change)}">${fmt(x.change, 0)}</td><td class="num">${x.price ? fmt(x.price, 2) : '–'}</td><td class="num">${fmt(x.shares, 0)}</td></tr>`).join('') || '<tr><td colspan="6">Tidak ada transaksi.</td></tr>'}</tbody></table></div>
-      <p class="disclaimer">Sumber: Form 4 SEC via Finnhub (terlambat beberapa hari). Hanya kode P (beli) dan S (jual) di pasar yang dihitung sebagai sinyal; hibah dan eksekusi opsi bukan keputusan beli/jual. Penjualan insider sering karena pajak atau diversifikasi. Tidak menjamin arah harga.</p>`;
+      <p class="disclaimer">Sumber: Form 4 SEC via Finnhub (terlambat beberapa hari). Hanya kode P (beli) dan S (jual) di pasar yang dihitung sebagai sinyal; hibah dan eksekusi opsi bukan keputusan beli/jual. Penjualan insider sering karena pajak atau diversifikasi. Tidak menjamin arah harga.</p>${srcLine(r)}`;
   }
   async function earnings(i, el, my) {
     if (!isUS(i) || !hasFinnhub()) { el.innerHTML = needFinnhub(i); return; }
     el.innerHTML = '<p class="loading">Finnhub earnings</p>';
     const r = await finn('earnings', i.sym);
-    if (my !== seq) return;
+    if (!live(my)) return;
     if (!r.ok) { el.innerHTML = unavailableBox('Earnings', r); return; }
     el.innerHTML = `<table class="dense static"><thead><tr><th>Kuartal</th><th class="num">EPS aktual</th><th class="num">Estimasi</th><th class="num">Kejutan</th><th class="num">%</th></tr></thead><tbody>
       ${r.data.map(e => `<tr><td>${esc(e.period)}</td><td class="num">${fmt(e.actual, 2)}</td><td class="num">${fmt(e.estimate, 2)}</td><td class="num ${sign(e.surprise)}">${fmt(e.surprise, 2)}</td><td class="num ${sign(e.surprisePct)}">${Number.isFinite(e.surprisePct) ? fmt(e.surprisePct, 1) + '%' : '–'}</td></tr>`).join('')}</tbody></table>
@@ -141,9 +150,9 @@ const AssetPanel = (() => {
     const r = isUS(i) && hasFinnhub() ? await finn('news', i.sym) : await getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query, mode: 'artlist', timespan: '3d', maxrecords: '50', sort: 'DateDesc' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + new URLSearchParams({ query, mode: 'artlist', format: 'json', timespan: '3d', maxrecords: '50', sort: 'DateDesc' }),
-      parse: Parsers.parseGdeltArticles, ttl: 20 * 60e3, persist: true, key: 'gdn3:' + i.sym,
+      parse: Parsers.parseGdeltArticles, ttl: 20 * 60e3, persist: true, key: 'gdn3:' + i.sym, alive: () => live(my),
     });
-    if (my !== seq) return;
+    if (!live(my)) return;
     if (!r.ok) { el.innerHTML = unavailableBox('Berita ' + i.name, r); return; }
     const sum = Analytics.summarizeNews(r.data);
     el.innerHTML = `<div class="list">${sum.analyzed.slice(0, 30).map(a => `<div><a class="item-title" href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a><div class="item-meta"><span>${esc(a.domain)}</span><span>${esc(fmtAge(a.seen))}</span>${a.a.themes[0] ? `<span class="tpill">${esc(a.a.themes[0].label)}</span>` : ''}${a.a.speculative ? '<span class="tpill spec">spekulatif</span>' : ''}</div></div>`).join('') || '<p class="hint">Tidak ada berita.</p>'}</div>${srcLine(r)}`;
@@ -151,8 +160,13 @@ const AssetPanel = (() => {
   /* order book kripto: data nyata Binance, dihitung spread dan ketidakseimbangan */
   async function book(i, el, my) {
     el.innerHTML = '<p class="loading">Binance order book</p>';
-    const r = await getData('binance', { server: `/api/crypto/depth?symbol=${i.bn}`, direct: `https://api.binance.com/api/v3/depth?symbol=${i.bn}&limit=100`, parse: Parsers.parseBinanceDepth, ttl: 2000, key: 'depth:' + i.bn });
-    if (my !== seq) return;
+    let r = await getData('binance', { server: `/api/crypto/depth?symbol=${i.bn}`, direct: `https://api.binance.com/api/v3/depth?symbol=${i.bn}&limit=100`, parse: Parsers.parseBinanceDepth, ttl: 2000, key: 'depth:' + i.bn });
+    /* tanpa server dan api.binance.com diblokir: cermin resmi data-api.binance.vision */
+    if ((!r.ok || r.stale) && !Net.server && live(my)) {
+      const m = await getData('binance', { direct: `https://data-api.binance.vision/api/v3/depth?symbol=${i.bn}&limit=100`, parse: Parsers.parseBinanceDepth, ttl: 2000, key: 'depthv:' + i.bn });
+      if (m.ok) r = m;
+    }
+    if (!live(my)) return;
     if (!r.ok) { el.innerHTML = unavailableBox('Order book ' + i.sym, r, 'Tidak disimulasikan: kalau Binance tidak bisa diakses, panel ini kosong.'); return; }
     const { bids, asks } = r.data;
     if (!bids.length || !asks.length) { el.innerHTML = '<p class="hint">Order book kosong.</p>'; return; }
@@ -165,14 +179,14 @@ const AssetPanel = (() => {
       <div><dt>Kedalaman bid ±1%</dt><dd>${fmtCompact(b1)} <small>USDT</small></dd></div><div><dt>Kedalaman ask ±1%</dt><dd>${fmtCompact(a1)} <small>USDT</small></dd></div><div><dt>Ketidakseimbangan</dt><dd class="${sign(imb)}">${fmtPct(imb, 1)}</dd></div></dl>
       <div class="c-cols"><table class="dense static"><thead><tr><th class="num">Bid</th><th class="num">Jumlah</th><th></th></tr></thead><tbody>${bids.slice(0, top).map(x => row(x, 'up')).join('')}</tbody></table>
       <table class="dense static"><thead><tr><th class="num">Ask</th><th class="num">Jumlah</th><th></th></tr></thead><tbody>${asks.slice(0, top).map(x => row(x, 'down')).join('')}</tbody></table></div>
-      <p class="hint">${qBadge('live')} Snapshot 100 level Binance ${esc(i.bn)}. Spread dan ketidakseimbangan = ${qBadge('calculated')}. Open interest, funding, likuidasi (derivatif) dan metrik on-chain belum dipasang. ${srcLine(r)}</p>`;
+      <p class="hint">${qBadge(r.stale ? 'stale' : 'live')} Snapshot 100 level Binance ${esc(i.bn)}${r.stale ? ' (SALINAN LAMA, sumber gagal)' : ''}. Spread dan ketidakseimbangan = ${qBadge('calculated')}. Open interest, funding, likuidasi (derivatif) dan metrik on-chain belum dipasang. ${srcLine(r)}</p>`;
   }
 
   async function render(i, el, flag) {
     cur = i;
     const my = ++seq;
     await Net.ready();
-    if (my !== seq) return;
+    if (!live(my)) return;
     const tabs = tabsFor(i);
     if (!tabs.some(t => t[0] === tab)) tab = tabs[0][0];
     flag.hidden = !(tab === 'health');
@@ -194,5 +208,8 @@ const AssetPanel = (() => {
     render(cur, $('#healthBody'), $('#hFlag'));
   });
   bus.on('companyTab', t => { tab = t; Store.set('assetTab', t); if (cur) render(cur, $('#healthBody'), $('#hFlag')); });
-  return { render, get current() { return cur; } };
+  /* dipakai halaman detail aset: render satu bagian ke elemen lain dengan token sendiri */
+  const PARTS = { fund: (i, el, a) => fund(i, el, a), insider: (i, el, a) => insider(i, el, a), earnings: (i, el, a) => earnings(i, el, a), book: (i, el, a) => book(i, el, a), why: (i, el, a) => why(i, el, a) };
+  function renderPart(part, i, el, alive) { const f = PARTS[part]; return f ? f(i, el, alive) : null; }
+  return { render, renderPart, isUS, get current() { return cur; } };
 })();

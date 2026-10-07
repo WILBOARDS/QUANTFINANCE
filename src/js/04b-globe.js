@@ -106,7 +106,7 @@ function createGlobe(host, opts = {}) {
   let W = 0, H = 0, dpr = 1, R = 100;
   let rot = opts.rotate ? opts.rotate.slice() : [-105, -5, 0];
   let zoom = opts.zoom || 1;
-  let dirty = true, auto = opts.autoRotate !== false && !REDUCED, lastUser = 0;
+  let dirty = true, auto = opts.autoRotate !== false && !REDUCED, lastUser = 0, lastAuto = null, noAutoResume = false;
   let hover = null, selected = null, flight = null;
   const L = {                                       // data lapisan
     choropleth: null, markets: [], news: [], hazards: [], ships: [], chokepoints: [], boxes: [],
@@ -380,7 +380,7 @@ function createGlobe(host, opts = {}) {
   canvas.addEventListener('keydown', e => {
     const step = 8 / zoom;
     const k = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-    if (k) { e.preventDefault(); rot = [rot[0] + k[0], clamp(rot[1] + k[1], -85, 85), 0]; dirty = true; auto = false; }
+    if (k) { e.preventDefault(); rot = [rot[0] + k[0], clamp(rot[1] + k[1], -85, 85), 0]; dirty = true; auto = false; lastUser = Date.now(); }
     if (e.key === '+' || e.key === '=') { zoom = clamp(zoom * 1.25, 0.8, 300); dirty = true; }
     if (e.key === '-') { zoom = clamp(zoom / 1.25, 0.8, 300); dirty = true; }
   });
@@ -422,7 +422,7 @@ function createGlobe(host, opts = {}) {
   /* ---------------- loop gambar ---------------- */
   let lastFrame = 0, running = true;
   function needsAnim() {
-    return auto || flight || shipAnim.size > 0 ||
+    return auto || flight || (vis.ships && shipAnim.size > 0) ||
       (!REDUCED && ((vis.markets && L.markets.some(m => m.open)) || (vis.hazards && L.hazards.some(h => h.alert === 'Red' || h.alert === 'Orange' || h.mag >= 6))));
   }
   function loop(ts) {
@@ -436,7 +436,9 @@ function createGlobe(host, opts = {}) {
     const dt = Math.min(ts - lastFrame, 100);
     lastFrame = ts;
     if (auto && !REDUCED) rot = [rot[0] + dt * 0.004, rot[1], 0];
-    if (!auto && opts.autoRotate !== false && !REDUCED && Date.now() - lastUser > 45000 && !selected) auto = true;
+    if (!auto && opts.autoRotate !== false && !REDUCED && !noAutoResume && Date.now() - lastUser > 45000 && !selected) auto = true;
+    /* tombol "Putar" mengikuti status sebenarnya (seret, roda, tombol zoom, dan terbang mematikan putaran) */
+    if (auto !== lastAuto) { lastAuto = auto; if (opts.onAuto) opts.onAuto(auto); }
     if (flight) {
       const k = clamp((ts - flight.t0) / flight.ms, 0, 1), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       const p = flight.ip(e);
@@ -457,6 +459,10 @@ function createGlobe(host, opts = {}) {
       if (name === 'ships') {
         const old = new Map(L.ships.map(v => [v.mmsi, v]));
         const now = performance.now();
+        /* animasi yang sudah lewat atau milik kapal yang hilang dari data harus dibuang, kalau tidak
+           needsAnim() terus true dan globe menggambar ulang 30 fps selamanya */
+        const ids = new Set(data.map(v => v.mmsi));
+        for (const [id, an] of shipAnim) if (now - an.t0 > 1500 || !ids.has(id)) shipAnim.delete(id);
         for (const v of data) {
           const o = old.get(v.mmsi);
           if (o && (o.lat !== v.lat || o.lon !== v.lon) && !REDUCED && data.length < 6000) shipAnim.set(v.mmsi, { from: [o.lon, o.lat], to: [v.lon, v.lat], t0: now });
@@ -465,7 +471,7 @@ function createGlobe(host, opts = {}) {
       L[name] = data; dirty = true;
     },
     get(name) { return L[name]; },
-    show(name, on) { vis[name] = on; dirty = true; },
+    show(name, on) { vis[name] = on; if (name === 'ships' && !on) shipAnim.clear(); dirty = true; },
     isShown(name) { return !!vis[name]; },
     select(sel) { selected = sel; dirty = true; },
     flyTo(lon, lat, z = Math.max(zoom, 1.8), ms = 1200) {
@@ -475,7 +481,8 @@ function createGlobe(host, opts = {}) {
     },
     zoomBy(f) { zoom = clamp(zoom * f, 0.8, 300); dirty = true; auto = false; lastUser = Date.now(); },
     reset() { flight = null; rot = opts.rotate ? opts.rotate.slice() : [-105, -5, 0]; zoom = opts.zoom || 1; selected = null; dirty = true; },
-    setAuto(on) { auto = on && !REDUCED; lastUser = Date.now(); },
+    setAuto(on) { auto = on && !REDUCED; noAutoResume = !on; lastUser = Date.now(); dirty = true; },
+    get auto() { return auto; },
     redraw() { dirty = true; },
     resize,
     get state() { return { rot: rot.slice(), zoom, auto, selected }; },

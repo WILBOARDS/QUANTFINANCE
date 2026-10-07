@@ -5,8 +5,10 @@ const ChartView = (() => {
   const el = $('#chart');
   const C = { up: '#34d1a4', down: '#ff6f61', brass: '#e0b15a', blue: '#6fb1ff', ink2: '#93a8bf', grid: 'rgba(23,49,74,0.55)' };
   const TF_N = { '1M': 22, '3M': 64, '6M': 128, '1Y': 256, '5Y': 1300 };
-  let chart, main, vol, ma20, ma50;
-  let cur = null, bars = [], byTime = new Map(), req = 0, range52 = null, hist = null;
+  let chart, main, vol, ma20, ma50, fixLinks = () => {};
+  /* barsOf/barsTf: aset & timeframe pemilik "bars" saat ini. Tick hanya boleh ditulis ke bar milik
+     aset yang sama, supaya harga aset baru tidak masuk ke grafik aset lama selama riwayat dimuat. */
+  let cur = null, bars = [], byTime = new Map(), req = 0, range52 = null, hist = null, barsOf = null, barsTf = null, req52 = 0;
 
   function init() {
     chart = LightweightCharts.createChart(el, {
@@ -23,6 +25,9 @@ const ChartView = (() => {
       },
       handleScale: { axisPressedMouseMove: true },
     });
+    /* logo atribusi TradingView (wajib lisensi) dibuat library tanpa rel=noopener: tambahkan */
+    fixLinks = () => el.querySelectorAll('a[target="_blank"]:not([rel~="noopener"])').forEach(a => { a.rel = 'noopener noreferrer'; });
+    fixLinks();
     chart.subscribeCrosshairMove(p => {
       if (!bars.length) return;
       const b = p && p.time !== undefined ? byTime.get(p.time) : null;
@@ -73,6 +78,7 @@ const ChartView = (() => {
     chart.timeScale().applyOptions({ timeVisible: State.tf === '1D' });
     chart.timeScale().fitContent();
     legend(bars[bars.length - 1]);
+    requestAnimationFrame(fixLinks);   // logo bisa baru dibuat setelah gambar pertama
   }
 
   function legend(b) {
@@ -87,16 +93,18 @@ const ChartView = (() => {
 
   /* riwayat: sumber nyata dulu (MarketData). Simulasi HANYA di mode demo dan hanya untuk aset
      yang memang tidak punya sumber nyata, supaya harga asli tidak dicampur riwayat palsu. */
+  /* hasil berupa { bars, hist } dan TIDAK menyentuh state modul: pemanggil yang memutuskan
+     apakah hasil ini masih relevan. Bar disalin karena MarketData menyimpannya di cache bersama
+     dan applyTick mengubah bar terakhir. */
   async function fetchBars(inst, tf) {
     const h = await MarketData.history(inst, tf);
-    if (h && h.bars && h.bars.length) { hist = h; return h.bars; }
+    if (h && h.bars && h.bars.length) return { bars: h.bars.map(b => ({ ...b })), hist: h };
     if (State.demo && !inst.real) {
-      hist = { quality: 'sim', source: 'Generator simulasi (mode demo)' };
-      if (tf === '1D') return ensureIntra(inst).map(b => ({ ...b }));
-      return ensureDaily(inst).slice(-TF_N[tf]).map(b => ({ ...b }));
+      const sim = { quality: 'sim', source: 'Generator simulasi (mode demo)' };
+      if (tf === '1D') return { bars: ensureIntra(inst).map(b => ({ ...b })), hist: sim };
+      return { bars: ensureDaily(inst).slice(-TF_N[tf]).map(b => ({ ...b })), hist: sim };
     }
-    hist = h || { quality: 'unavailable', error: 'Tidak ada sumber riwayat harga untuk aset ini.' };
-    return [];
+    return { bars: [], hist: h || { quality: 'unavailable', error: 'Tidak ada sumber riwayat harga untuk aset ini.' } };
   }
 
   async function compute52(inst) {
@@ -109,11 +117,14 @@ const ChartView = (() => {
     return [lo, hi];
   }
   function noteHist() {
+    /* tombol "Lilin" ditandai tidak berlaku saat data hanya harga penutupan */
+    const cb = $('#typeSeg [data-type="candle"]');
+    if (cb) { const co = !!(hist && hist.closeOnly && bars.length); cb.dataset.closeOnly = String(co); cb.title = co ? 'Data ini hanya punya harga penutupan; ditampilkan sebagai garis' : ''; }
     const na = $('#chartNa');
     const q = $('#cHist');
     if (bars.length) {
       na.hidden = true;
-      q.innerHTML = hist ? qBadge(hist.quality || 'unavailable', hist.source) + `<span class="meta">${esc(hist.source || '')}</span>` : '';
+      q.innerHTML = hist ? qBadge(hist.quality || 'unavailable', hist.source) + `<span class="meta">${esc(hist.source || '')}${hist.closeOnly && State.type === 'candle' ? ' · hanya harga penutupan, jadi candle ditampilkan sebagai garis' : ''}</span>` : '';
     } else {
       na.hidden = false;
       const why = hist && hist.error ? hist.error : 'Tidak ada sumber riwayat harga.';
@@ -125,10 +136,19 @@ const ChartView = (() => {
 
   async function load() {
     const my = ++req;
-    const inst = cur;
-    const b = await fetchBars(inst, State.tf);
-    if (my !== req) return;
-    bars = b;
+    const inst = cur, tf = State.tf;
+    /* aset berganti: kosongkan grafik lama dulu supaya candle & lencana aset sebelumnya
+       tidak tampil di bawah judul aset baru selama riwayat dimuat */
+    if (barsOf !== inst && main) {
+      bars = []; byTime = new Map(); barsOf = null;
+      main.setData([]); if (vol) vol.setData([]); if (ma20) ma20.setData([]); if (ma50) ma50.setData([]);
+      legend(null);
+      $('#chartNa').hidden = true;
+      $('#cHist').innerHTML = '<span class="loading">Memuat riwayat</span>';
+    }
+    const r = await fetchBars(inst, tf);
+    if (my !== req || cur !== inst) return;
+    bars = r.bars; hist = r.hist; barsOf = inst; barsTf = tf;
     buildSeries();
     setData();
     noteHist();
@@ -152,18 +172,30 @@ const ChartView = (() => {
     const r = range52 ? `${fmt(range52[0], d)} – ${fmt(range52[1], d)}` : '–';
     $('#stats').innerHTML = [
       ['Buka', fmt(i.open, d)], ['Tertinggi', fmt(i.high, d)], ['Terendah', fmt(i.low, d)],
-      ['Tutup kemarin', fmt(i.prev, d)], ['Volume', i.type === 'index' ? '–' : fmtCompact(i.volume)], ['Kisaran 52 minggu', r],
+      [i.type === 'crypto' ? 'Harga 24 jam lalu' : 'Tutup sebelumnya', fmt(i.prev, d)], ['Volume', i.type === 'index' ? '–' : fmtCompact(i.volume)], ['Kisaran 52 minggu', r],
     ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   }
 
   function applyTick(inst) {
     if (!bars.length || !main || !Number.isFinite(inst.price)) return;
+    if (barsOf !== inst || barsTf !== State.tf) return;   // riwayat aset/timeframe ini belum selesai dimuat
     if (hist && hist.quality === 'eod' && State.tf !== '1D') return;   // jangan menimpa bar harian resmi dengan tick
+    /* mode demo: angka simulasi tidak boleh masuk ke grafik yang riwayatnya data nyata */
+    if (inst.quality === 'sim' && (!hist || hist.quality !== 'sim')) return;
+    if (inst.quality === 'stale' || inst.quality === 'unavailable') return;
+    /* waktu tick = waktu data dari sumber (bukan jam komputer): saat bursa tutup harga terakhir
+       tidak membuat candle 5 menit datar baru, dan bar lama tidak "ditarik" ke hari ini */
+    const tsec = inst.quality === 'sim' ? Date.now() / 1000 : Date.parse(inst.asOf || '') / 1000;
+    if (!Number.isFinite(tsec)) return;
     const price = inst.price;
     let bar = bars[bars.length - 1];
     if (State.tf === '1D') {
-      const t = Math.floor(Date.now() / 1000 / INTRA_STEP) * INTRA_STEP;
+      const t = Math.floor(tsec / INTRA_STEP) * INTRA_STEP;
+      if (t < bar.time) return;
       if (t > bar.time) { bar = { time: t, open: price, high: price, low: price, close: price, volume: 0 }; bars.push(bar); byTime.set(t, bar); }
+    } else {
+      const per = bars.length > 1 ? bars[bars.length - 1].time - bars[bars.length - 2].time : 86400;
+      if (tsec < bar.time || tsec >= bar.time + per) return;      // tick di luar periode bar terakhir
     }
     bar.close = price;
     if (price > bar.high) bar.high = price;
@@ -182,10 +214,13 @@ const ChartView = (() => {
     init,
     async select(inst) {
       cur = inst; range52 = null;
+      const my = ++req52;
       head();
       load();
-      range52 = await compute52(inst);
-      if (cur === inst) head();
+      const r = await compute52(inst);
+      if (my !== req52 || cur !== inst) return;   // pilihan sudah berganti: jangan timpa kisaran aset lain
+      range52 = r;
+      head();
     },
     reload() { if (cur) load(); },
     onTick(changed) {
@@ -194,5 +229,7 @@ const ChartView = (() => {
       head();
     },
     get current() { return cur; },
+    /* true bila grafik aset terpilih sudah punya riwayat (dipakai supaya muat ulang tidak mereset zoom) */
+    get hasBars() { return bars.length > 0 && barsOf === cur; },
   };
 })();

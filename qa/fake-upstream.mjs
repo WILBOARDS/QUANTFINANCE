@@ -4,7 +4,8 @@
    Semua judul berita diawali "[UJI]" supaya screenshot jelas bukan data nyata.
    Tidak pernah ikut dalam dist/quant-terminal.html.
    ===================================================================== */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const WC = require('../node_modules/world-countries/countries.json').filter(c => c.independent);
@@ -202,8 +203,14 @@ function wiki(url) {
 }
 
 /* router utama: URL -> {status, type, body} atau null bila host tidak dikenal */
+/* sumber palsu tambahan per fitur: qa/fakes/*.mjs mengekspor default (url: URL) => {status, type, body} | null.
+   Fitur baru menambah file di sana tanpa mengubah file ini. */
+const FAKE_DIR = fileURLToPath(new URL('./fakes/', import.meta.url));
+const EXTRA = [];
+if (existsSync(FAKE_DIR)) for (const f of readdirSync(FAKE_DIR).filter(x => x.endsWith('.mjs')).sort()) EXTRA.push((await import(pathToFileURL(FAKE_DIR + f).href)).default);
 export function fakeUpstream(href) {
   const url = new URL(href);
+  for (const fn of EXTRA) { const r = fn(url); if (r) return r; }
   const h = url.hostname;
   if (h === 'api.worldbank.org') return worldbank(url);
   if (h === 'www.imf.org') return imf(url);

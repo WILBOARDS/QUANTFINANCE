@@ -1,0 +1,22 @@
+  <!-- ============ HALAMAN: ALERT ============ -->
+  <section id="page-alerts" class="page al-page" hidden aria-label="Alert">
+    <section class="card al-card" aria-label="Alert">
+      <div class="card-head">
+        <h2>Alert</h2>
+        <span class="spacer"></span>
+        <button type="button" class="mini-btn" id="alCheck">Cek sekarang</button>
+        <button type="button" class="mini-btn" id="alNotifBtn">Izinkan notifikasi browser</button>
+      </div>
+      <form class="al-form" id="alForm">
+        <label>Aset <input id="alSym" required placeholder="AAPL" autocomplete="off" spellcheck="false"></label>
+        <label>Ukuran <select id="alField"><option value="price">Harga</option><option value="chg">Perubahan % harian</option><option value="volume">Volume</option></select></label>
+        <label>Operator <select id="alOp"><option value="&gt;">&gt;</option><option value="&lt;">&lt;</option><option value="&gt;=">&gt;=</option><option value="&lt;=">&lt;=</option></select></label>
+        <label>Nilai <input id="alVal" required placeholder="300, -5, atau AVG*2" autocomplete="off"></label>
+        <button type="submit" class="btn">Buat alert</button>
+        <span class="meta" id="alMsg" role="status"></span>
+      </form>
+      <p class="meta al-notif" id="alNotif"></p>
+      <div class="table-wrap" id="alBody"></div>
+      <p class="hint al-note">Alert dicek tiap 30 detik selama tab terbuka, memakai sumber harga yang sama dengan halaman detail aset. Bila data tidak tersedia atau basi, alert tidak dievaluasi (tidak ada pemicu palsu). Perubahan % kripto = 24 jam bergulir (Binance).</p>
+    </section>
+  </section>

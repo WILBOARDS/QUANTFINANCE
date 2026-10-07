@@ -7,7 +7,7 @@ const App = (() => {
 
   /* ---------- pita harga di atas ---------- */
   function buildTape() {
-    const one = TAPE_SYMS.map(s => `<span class="tp" data-sym="${s}"><b>${esc(s)}</b><span class="px num"></span><span class="ch num"></span></span>`).join('');
+    const one = TAPE_SYMS.map(s => `<span class="tp" data-sym="${s}"><b>${esc(s)}</b><span class="px num"></span><span class="ch num"></span><span class="tq"></span></span>`).join('');
     $('#tapeTrack').innerHTML = `<div class="tape-set">${one}</div><div class="tape-set dup">${one}</div>`;
     updateTape(TAPE_SYMS.map(s => BY[s]));
   }
@@ -18,6 +18,11 @@ const App = (() => {
       $$(`#tapeTrack .tp[data-sym="${i.sym}"]`).forEach(el => {
         $('.px', el).textContent = fmt(i.price, i.dp);
         const ch = $('.ch', el); ch.textContent = fmtPct(p); ch.className = 'ch num ' + sign(p);
+        /* pita juga menunjukkan kualitas: penutupan FRED, basi, tidak resmi, atau simulasi tidak tampak sama dengan live */
+        const tq = $('.tq', el), q = i.quality;
+        const TAG = { eod: 'tutup', stale: 'basi', unofficial: 'tdk resmi', sim: 'SIM', delayed: 'tunda' };
+        tq.textContent = TAG[q] || ''; tq.className = 'tq q-' + q;
+        el.title = `${i.name}: ${(QUALITY[q] || [q])[0]}${i.srcName ? ' · ' + i.srcName : ''}${i.asOf ? ' · ' + fmtAge(i.asOf) : ''}${chgBasis(i) ? ' · perubahan ' + chgBasis(i) : ''}`;
       });
     }
   }
@@ -81,7 +86,9 @@ const App = (() => {
     const list = visibleList();
     const show = new Set(list);
     const empty = $('.no-rows', rowsEl);
-    list.forEach(i => rowsEl.insertBefore(rowMap.get(i.sym).li, empty));
+    /* pindahkan hanya baris yang posisinya berubah: memindahkan node melepas fokus keyboard */
+    const desired = [...list.map(i => rowMap.get(i.sym).li), ...STOCKS.filter(i => !show.has(i)).map(i => rowMap.get(i.sym).li), empty];
+    desired.forEach((el, k) => { if (rowsEl.children[k] !== el) rowsEl.insertBefore(el, rowsEl.children[k] || null); });
     for (const i of STOCKS) rowMap.get(i.sym).li.hidden = !show.has(i);
     empty.hidden = list.length > 0;
     $('#wCount').textContent = `${list.length} dari ${STOCKS.length}`;
@@ -114,7 +121,7 @@ const App = (() => {
       const members = STOCKS.filter(x => x.mkt === inst.mkt);
       const p = pct(inst);
       el.innerHTML = `
-        <div class="h-verdict"><strong>${esc(m.city)}</strong><p>${esc(m.ex)}, indeks ${esc(inst.name)} <span class="${sign(p)} num">${fmtPct(p)}</span> hari ini.</p></div>
+        <div class="h-verdict"><strong>${esc(m.city)}</strong><p>${esc(m.ex)}, indeks ${esc(inst.name)} ${inst.real ? `<span class="${sign(p)} num">${fmtPct(p)}</span> (${esc(chgBasis(inst))}) ${qBadge(inst.quality, inst.srcName)}` : '<span class="na">tidak tersedia</span>'}.</p></div>
         <ul class="ratios">
           <li><span>Status</span><span class="v ${st.open ? 'up' : ''}">${st.label}</span></li>
           <li><span>${st.open ? 'Tutup' : 'Buka'}</span><span class="v">${esc(st.detail.replace(/^(tutup|buka) dalam /, 'dalam '))}</span></li>
@@ -194,13 +201,34 @@ const App = (() => {
 
   /* ---------- halaman ---------- */
   const PAGES = { intel: IntelPage, country: CountryPage, news: NewsPage, ships: ShipsPage, macro: MacroPage, sources: SourcesPage };
+  /* halaman baru mendaftarkan dirinya sendiri di akhir filenya (src/js/08c.., 09x..).
+     nav (opsional) = { group, groupLabel, label, short, icon: '<path .../>', after: 'idHalaman' }
+     menambah tombol di bilah samping tanpa mengubah template. */
+  function registerPage(id, mod, nav) {
+    PAGES[id] = mod;
+    if (!nav || document.querySelector(`.side-nav [data-page="${id}"]`)) return;
+    let g = document.querySelector(`.side-nav .side-group[data-group="${nav.group}"]`);
+    if (!g) {
+      g = document.createElement('div'); g.className = 'side-group'; g.dataset.group = nav.group;
+      g.innerHTML = `<span class="sg">${esc(nav.groupLabel || nav.group)}</span>`;
+      $('.side-nav').insertBefore(g, $('#panelHidden'));
+    }
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.page = id; b.title = nav.label;
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">${nav.icon || '<circle cx="12" cy="12" r="8"/>'}</svg><span class="sl">${esc(nav.label)}</span><span class="ss">${esc(nav.short || nav.label)}</span>`;
+    const after = nav.after && g.querySelector(`[data-page="${nav.after}"]`);
+    g.insertBefore(b, after ? after.nextSibling : null);
+  }
   let curPage = 'market';
+  /* id halaman hanya huruf kecil dan harus ada di DOM. Hash dari luar (#news?ref=wa, #a:b, #main)
+     tidak boleh masuk ke querySelector mentah-mentah: selector tidak valid melempar error. */
+  const isPage = p => typeof p === 'string' && /^[a-z]+$/.test(p) && !!document.getElementById('page-' + p);
   function showPage(p) {
-    if (!$('#page-' + p)) p = 'market';
+    if (!isPage(p)) p = 'market';
     if (curPage !== p && PAGES[curPage] && PAGES[curPage].hide) PAGES[curPage].hide();
     curPage = p;
     $$('.page').forEach(el => { el.hidden = el.id !== 'page-' + p; });
-    $$('.nav button').forEach(b => { if (b.dataset.page === p) { b.setAttribute('aria-current', 'page'); b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else b.removeAttribute('aria-current'); });
+    $$('.side-nav button[data-page]').forEach(b => { if (b.dataset.page === p) { b.setAttribute('aria-current', 'page'); b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else b.removeAttribute('aria-current'); });
     if (p === 'market') requestAnimationFrame(() => { MapView.resize(); if (marketGlobe) marketGlobe.resize(); });
     if (p === 'cash') Cash.render();
     if (PAGES[p]) PAGES[p].show();
@@ -223,7 +251,9 @@ const App = (() => {
 
   /* ---------- kontrol ---------- */
   function wire() {
-    $('.nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showPage(b.dataset.page); });
+    $('.side-nav').addEventListener('click', e => { const b = e.target.closest('button[data-page]'); if (b) showPage(b.dataset.page); });
+    $('#mktChip').addEventListener('click', () => { showPage('market'); const b = $('.map-card .seg [data-view="hours"]'); if (b) b.click(); });
+    $('#errChip').addEventListener('click', () => { showPage('sources'); setTimeout(() => { const el = $('#errLogCard'); if (el) el.scrollIntoView({ block: 'start' }); }, 80); });
 
     $('#chips').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -283,16 +313,17 @@ const App = (() => {
     $('#setServerTest').addEventListener('click', async () => {
       const v = $('#setServer').value.trim().replace(/\/+$/, '');
       if (v && !/^https?:\/\/[\w.\-]+(:\d+)?$/.test(v)) { $('#setServerOut').textContent = 'Format alamat tidak valid. Contoh: http://localhost:8787'; return; }
-      Store.set('serverBase', v || 'http://localhost:8787');
       $('#setServerOut').textContent = 'Mengetes…';
-      const s = await Net.detect();
-      $('#setServerOut').textContent = s ? 'Tersambung ke ' + s.base + '. Muat ulang halaman untuk memakai semua sumber server.' : 'Server tidak ditemukan di alamat itu. Pastikan "npm start" sedang berjalan.';
+      /* alamat baru hanya disimpan bila benar-benar tersambung; server yang sedang dipakai tidak dibuang */
+      const s = await Net.probe(v || 'http://localhost:8787');
+      if (s) { Store.set('serverBase', s.base); Net.use(s); }
+      $('#setServerOut').textContent = s ? 'Tersambung ke ' + s.base + '. Sumber server dipakai mulai sekarang.' : 'Server tidak ditemukan di alamat itu. Pastikan "npm start" sedang berjalan. ' + (Net.server ? 'Server lama (' + Net.server.base + ') tetap dipakai.' : 'Pengaturan lama tidak diubah.');
     });
     $('#srvChip').addEventListener('click', () => showPage('sources'));
     dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
     document.addEventListener('keydown', e => {
-      if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); if (curPage === 'market') $('#q').focus(); else Palette.open(); }
+      if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); CommandBar.focus(); }
     });
   }
 
@@ -304,6 +335,20 @@ const App = (() => {
 
   /* ---------- jam di pojok kanan atas ---------- */
   const clockFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' });
+  /* status bursa di header: berapa bursa yang sedang buka (jadwal reguler, tanpa hari libur) */
+  function marketChip() {
+    const ids = Object.keys(MARKETS), open = ids.filter(id => statusOf(id).open);
+    const chip = $('#mktChip');
+    chip.dataset.state = open.length ? 'open' : 'closed';
+    $('#mktText').textContent = `Bursa buka ${open.length}/${ids.length}`;
+    chip.title = (open.length ? 'Buka: ' + open.map(id => MARKETS[id].ex).join(', ') : 'Semua bursa yang dipantau sedang tutup') + '. Dihitung dari jadwal reguler dan zona waktu; hari libur bursa tidak diperhitungkan. Klik untuk jam bursa.';
+  }
+  function errChip() {
+    const n = ErrorLog.count(), chip = $('#errChip');
+    chip.hidden = !n;
+    $('#errText').textContent = n + ' error';
+    chip.title = n + ' kejadian di log error internal (jaringan, penyedia, parser, tampilan, perintah). Klik untuk melihat.';
+  }
   function clock() {
     const o = {}; clockFmt.formatToParts(new Date()).forEach(p => { o[p.type] = p.value; });
     $('#clock').textContent = `${o.weekday} ${o.day} ${o.month}  ${o.hour}:${o.minute}:${o.second} ${o.timeZoneName}`;
@@ -332,22 +377,35 @@ const App = (() => {
     demoBanner();
     select(State.sel);
     clock(); setInterval(clock, 1000);
+    marketChip(); setInterval(marketChip, 30000);
+    errChip(); bus.on('errorlog', errChip);
     MarketData.updateMode();
     bus.on('server', serverChip);
-    Net.ready().then(async s => {
-      if (s) { await MarketData.startServerSources(); ChartView.reload(); renderHealth(BY[State.sel]); }
-    });
+    /* server ditemukan (saat start atau lewat tombol Tes/Coba lagi): mulai sumber server sekali.
+       Grafik hanya dimuat ulang bila belum punya riwayat, supaya zoom/geser pengguna tidak direset. */
+    let serverStarted = false;
+    const onServer = async s => {
+      if (!s || serverStarted) return;
+      serverStarted = true;
+      await MarketData.startServerSources();
+      if (!ChartView.hasBars) ChartView.reload();
+      renderHealth(BY[State.sel]);
+    };
+    Net.ready().then(onServer);
+    bus.on('serverUp', onServer);
     const mv = Store.get('mapView', 'map');
     if (mv !== 'map') { const b = $(`.map-card .seg [data-view="${mv}"]`); if (b) b.click(); }
     const start = (location.hash || '').slice(1) || 'market';
     if (start !== 'market') showPage(start);
-    window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (p && p !== curPage) showPage(p); });
+    /* hash yang bukan halaman (mis. #main dari tautan "lompat ke konten") diabaikan */
+    window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (p !== curPage && isPage(p)) showPage(p); });
 
     const lastQ = Object.fromEntries(INSTS.map(i => [i.sym, i.quality]));
     bus.on('tick', changed => {
       for (const i of changed) {
         /* aset terpilih baru dapat harga nyata pertama: segarkan panel intelijen & grafik */
-        if (i.sym === State.sel && lastQ[i.sym] !== i.quality) { renderHealth(i); ChartView.reload(); }
+        const was = lastQ[i.sym];
+        if (i.sym === State.sel && (was === 'unavailable' || was === 'sim') && i.real) { renderHealth(i); if (!ChartView.hasBars || was === 'sim') ChartView.reload(); }
         lastQ[i.sym] = i.quality;
       }
       for (const i of changed) if (rowMap.has(i.sym)) updateRow(i, true);
@@ -360,7 +418,6 @@ const App = (() => {
     setInterval(() => STOCKS.forEach(updateTag), 15000);
     if (State.liveCrypto) Live.start();
   }
-  return { init, showPage, select, legacyHealth };
+  return { init, showPage, select, legacyHealth, registerPage, get page() { return curPage; } };
 })();
 
-App.init();

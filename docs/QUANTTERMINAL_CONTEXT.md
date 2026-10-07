@@ -35,7 +35,32 @@ Peta dunia seperti Bloomberg yang menampilkan **pergerakan semua negara**: polit
 
 ---
 
-## 3. Status saat ini: v2 (5 Oktober 2026)
+## 3a. Status terbaru: v2.1 (7 Oktober 2026)
+
+Dikerjakan sesuai prompt "Bloomberg-like" pemilik, urut prioritas. **Fase 0 (perbaikan fondasi) selesai lebih dulu**, baru Prioritas 2.
+
+### Fase 0: fondasi
+- Build bisa diulang: font disimpan di `vendor/fonts` (OFL), versi paket dikunci persis, pencarian paket tahan perubahan `exports`, pesan error yang menyebut cara memperbaiki. `npm run doctor` memeriksa lingkungan.
+- E2E andal: urutan pencarian browser jelas (CHROME_PATH → Chromium playwright-core → Chrome/Edge sistem), `npm run e2e:install`, skenario terpisah di `qa/scenarios`, gagal otomatis bila ada exception, unhandled rejection, console.error, loading macet >20 dtk, atau lebih dari satu halaman tampil bersamaan.
+- Audit otomatis 8 dimensi (siklus hidup, race, DOM, error, kejujuran data, keamanan, jaringan, UI/aksesibilitas) menemukan ±100 masalah; semuanya diperbaiki lalu diverifikasi ulang (78 diverifikasi silang: 70 sudah beres, 8 sisanya diperbaiki kemudian). Contoh penting: harga tetap berlabel "Live" setelah sumber berhenti (kini otomatis "Basi"), tick masuk ke grafik aset lain, URL hash rusak menjatuhkan aplikasi, server mati karena satu permintaan rusak, CORS `null` terbuka untuk situs lain, CSP `unsafe-inline`, cache disk tanpa batas, backoff Binance memblokir cermin, salinan lama diberi label segar, FRED bulanan ditulis "Harian".
+- Audit "klik semua tombol" (D1–D4) di 3 mode jaringan: tanpa error, tanpa teks NaN/undefined, tanpa lencana Simulasi saat Mode Demo mati.
+- Pemindai rahasia (`npm run secrets`): file terlacak, dist, dan seluruh riwayat git.
+
+### Prioritas 2: sistem terminal
+- Registri entitas (`shared/entities.mjs`) + katalog referensi (`shared/entity-seed.mjs`, ±150 aset + semua negara + topik + bank sentral + chokepoint, tanpa angka pasar). Pencarian membedakan saham/ETF/indeks/kripto/valas/komoditas/suku bunga/negara/topik/bank sentral.
+- Parser perintah (`shared/commands.mjs`) + autocomplete; semua perintah di prompt punya tes.
+- Tata letak: header (bilah perintah, status bursa, status server/data, error, jam, pengaturan) + bilah samping + panel yang bisa diperkecil/diperbesar/ditutup (status tersimpan).
+- Halaman detail aset terpadu dengan registri tab; Datum (`{value, asOf, fetchedAt, source, quality, stale, currency}`) dan umur data selalu tampil.
+- Watchlist banyak daftar, alert (harga/perubahan/volume vs rata-rata) dengan data nyata.
+- Lapisan data: coba ulang + backoff eksponensial, stale-while-revalidate, cache negatif, tidak mengakali rate limit server lewat jalur langsung, log error internal.
+
+### Belum dikerjakan (Prioritas 3–7, urutan berikutnya)
+Grafik pro dengan indikator (SMA/EMA/RSI/MACD/Bollinger/VWAP/ATR), fundamental lengkap 12 tab dari SEC EDGAR + Piotroski/Altman nyata dengan "Lihat perhitungan", screener, halaman Rates/FX/Komoditas khusus, People/perusahaan dari Wikidata, kripto lanjutan (trades, funding/OI), heatmap, portofolio + risiko. Arsitekturnya sudah siap: tab baru cukup `SecurityTabs.register(...)`, indikator `ProChart.register(...)`, halaman baru `src/pages/*.html` + `App.registerPage(...)`.
+
+### Tetap belum terverifikasi
+Sama seperti v2: tidak ada API sungguhan yang bisa diakses dari sandbox; semua tes memakai sumber palsu berformat asli. Lihat bagian 3 di bawah.
+
+## 3. Status v2 (5 Oktober 2026)
 
 **Bentuk:** tetap satu file HTML (`dist/quant-terminal.html`, ±1,4 MB, bisa double-click) **ditambah** server Node opsional tanpa library (`npm start`) untuk sumber yang butuh kunci atau menolak akses langsung dari browser. Build sekarang pakai Node (`build.mjs`), **tidak perlu Python lagi**.
 

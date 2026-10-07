@@ -1,0 +1,32 @@
+  <!-- ============ HALAMAN: WATCHLIST (banyak daftar, disimpan di browser) ============ -->
+  <section id="page-watchlist" class="page wl-page" hidden aria-label="Watchlist">
+    <section class="card wl-card" aria-label="Watchlist">
+      <div class="card-head">
+        <h2>Watchlist: <span id="wlTitle"></span></h2>
+        <span class="meta" id="wlUpdated"></span>
+        <span class="spacer"></span>
+        <div class="wl-actions">
+          <button type="button" class="mini-btn" id="wlNew">Daftar baru</button>
+          <button type="button" class="mini-btn" id="wlRename">Ganti nama</button>
+          <button type="button" class="mini-btn" id="wlDel">Hapus daftar</button>
+          <button type="button" class="mini-btn" id="wlRefresh">Muat ulang</button>
+          <button type="button" class="mini-btn" id="wlExport" title="Unduh CSV">CSV</button>
+        </div>
+      </div>
+      <div class="tabs" role="tablist" id="wlTabs" aria-label="Pilih daftar"></div>
+      <form class="wl-form" id="wlNameForm" hidden>
+        <label for="wlName" id="wlNameLbl">Nama</label>
+        <input id="wlName" maxlength="40" autocomplete="off">
+        <button type="submit" class="mini-btn">Simpan</button>
+        <button type="button" class="mini-btn" id="wlNameCancel">Batal</button>
+      </form>
+      <div class="wl-add">
+        <label for="wlAdd">Tambah aset</label>
+        <input id="wlAdd" type="search" placeholder="Kode atau nama: AMD, EURUSD, GOLD, US2Y, BTC" autocomplete="off" spellcheck="false">
+        <button type="button" class="mini-btn" id="wlAddBtn">Tambah</button>
+        <span class="meta" id="wlMsg" role="status"></span>
+      </div>
+      <div class="table-wrap" id="wlBody"></div>
+      <p class="hint wl-note">Daftar disimpan di browser ini (localStorage), tidak dikirim ke mana pun. Harga diambil dari sumber masing-masing aset; yang tidak punya sumber tampil "–" dengan alasannya (arahkan kursor). Klik angka untuk melihat asal-usulnya.</p>
+    </section>
+  </section>

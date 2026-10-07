@@ -116,8 +116,12 @@ export async function createHarness() {
     const btn = await p.$(`.nav ${sel}, .side-nav ${sel}`);
     if (!btn) throw new Error('Tombol navigasi tidak ada: ' + pageId);
     await btn.click(); await wait(300);
-    const vis = await p.evaluate(id => { const el = document.getElementById('page-' + id); return !!el && !el.hidden; }, pageId);
-    if (!vis) throw new Error('Halaman tidak terbuka setelah klik navigasi: ' + pageId);
+    /* cek yang BENAR-BENAR tampil (gaya terhitung), bukan hanya atribut hidden: tepat satu halaman */
+    const vis = await p.evaluate(id => {
+      const shown = [...document.querySelectorAll('main .page')].filter(e => getComputedStyle(e).display !== 'none').map(e => e.id);
+      return { ok: shown.length === 1 && shown[0] === 'page-' + id, shown };
+    }, pageId);
+    if (!vis.ok) throw new Error(`Halaman ${pageId}: yang tampil ${JSON.stringify(vis.shown)}`);
   };
 
   async function close() {

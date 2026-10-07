@@ -94,7 +94,7 @@ const CountryData = (() => {
         if (r.ok && r.data && Object.keys(r.data).length > 20) {
           for (const [iso, ser] of Object.entries(r.data)) {
             const p = pickImf(ser);
-            if (p) put(iso, ind.key, { value: p.value, year: p.year, series: ser, src: 'IMF WEO', proj: p.year >= THIS_YEAR, quality: p.year >= THIS_YEAR ? 'projection' : 'historical', code: ind.imf });
+            if (p) put(iso, ind.key, { value: p.value, year: p.year, series: ser, src: 'IMF WEO', proj: p.year >= THIS_YEAR, quality: r.stale ? 'stale' : p.year >= THIS_YEAR ? 'projection' : 'historical', code: ind.imf });
           }
           meta[ind.key] = { ...r, sourceName: 'IMF WEO DataMapper', code: ind.imf };
           return true;
@@ -146,7 +146,7 @@ const CountryData = (() => {
   function fx() {
     if (!fxP) fxP = (async () => {
       let r = await getData('fx', { server: '/api/fx', direct: 'https://open.er-api.com/v6/latest/USD', parse: Parsers.parseErApi, ttl: 3600e3, persist: true, key: 'fx' });
-      if (!r.ok) r = await getData('fx', { direct: 'https://api.frankfurter.app/latest?from=USD', parse: Parsers.parseFrankfurter, ttl: 3600e3, persist: true, key: 'fx2' });
+      if (!r.ok) r = await getData('frankfurter', { direct: 'https://api.frankfurter.app/latest?from=USD', parse: Parsers.parseFrankfurter, ttl: 3600e3, persist: true, key: 'fx2' });
       if (!r.ok) fxP = null;
       return r;
     })();
@@ -174,22 +174,22 @@ const CountryData = (() => {
     if (mode === 'local') return `sourcecountry:${nm.toLowerCase().replace(/[^a-z]/g, '')}`;
     return `"${nm}" (economy OR inflation OR "central bank" OR election OR currency OR trade OR market OR oil OR government OR protest OR sanctions OR investment) sourcelang:english`;
   }
-  async function news(c, mode = 'about', span = '3d') {
+  async function news(c, mode = 'about', span = '3d', alive) {
     const query = newsQuery(c, mode);
     const p = new URLSearchParams({ query, mode: 'artlist', format: 'json', timespan: span, maxrecords: '75', sort: 'DateDesc' });
     return getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query, mode: 'artlist', timespan: span, maxrecords: '75', sort: 'DateDesc' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + p, parse: Parsers.parseGdeltArticles,
-      ttl: 15 * 60e3, persist: true, key: 'gdn:' + mode + ':' + c.iso3 + ':' + span, timeout: 35000,
+      ttl: 15 * 60e3, persist: true, key: 'gdn:' + mode + ':' + c.iso3 + ':' + span, timeout: 35000, alive,
     });
   }
-  async function tone(c) {
+  async function tone(c, alive) {
     const query = newsQuery(c, 'about');
     const p = new URLSearchParams({ query, mode: 'timelinetone', format: 'json', timespan: '30d' });
     return getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query, mode: 'timelinetone', timespan: '30d' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + p, parse: Parsers.parseGdeltTimeline,
-      ttl: 60 * 60e3, persist: true, key: 'gdt:' + c.iso3, timeout: 35000,
+      ttl: 60 * 60e3, persist: true, key: 'gdt:' + c.iso3, timeout: 35000, alive,
     });
   }
 
@@ -276,11 +276,11 @@ const CountryPage = (() => {
         const colr = ind ? macroColor(ind, v) : macroColor({ key: 'score' }, v);
         return `<td class="num"><span class="heat" style="background:${colr}55">${col.k === 'score' ? v : fmt(v, ind && ind.key === 'debt' ? 0 : 1)}</span></td>`;
       }).join('');
-      return `<tr data-iso="${c.iso3}" aria-selected="${c.iso3 === S.sel}">${cells}</tr>`;
+      return `<tr data-iso="${c.iso3}" tabindex="0" aria-selected="${c.iso3 === S.sel}">${cells}</tr>`;
     }).join('');
     $('#cTable').innerHTML = head + `<tbody>${body}</tbody>`;
     const m = CountryData.meta.growth;
-    $('#cSrc').innerHTML = m ? `${qBadge(m.ok === false ? 'unavailable' : m.fallback ? 'historical' : 'projection')} ${esc(m.sourceName || '')}${m.fetchedAt ? ' · ' + esc(fmtAge(m.fetchedAt)) : ''} · nilai ${THIS_YEAR} = estimasi IMF · skor = kalkulasi eksperimental` : '<span class="loading">Memuat data ekonomi semua negara</span>';
+    $('#cSrc').innerHTML = m ? `${qBadge(m.ok === false ? 'unavailable' : m.stale ? 'stale' : m.fallback ? 'historical' : 'projection')} ${esc(m.sourceName || '')}${m.fetchedAt ? ' · ' + esc(fmtAge(m.fetchedAt)) : ''} · nilai ${THIS_YEAR} = estimasi IMF · skor = kalkulasi eksperimental` : '<span class="loading">Memuat data ekonomi semua negara</span>';
   }
 
   /* ---------------- detail ---------------- */
@@ -359,10 +359,13 @@ const CountryPage = (() => {
   }
   /* ringkasan kata-kata dari angka (kalkulasi, bukan opini) */
   function verdict(c) {
-    const g = k => { const x = CountryData.get(c.iso3, k); return x ? x.value : null; };
+    /* sumber dan tahun ditulis apa adanya per angka (IMF proyeksi, IMF aktual, atau World Bank tahun lama) */
+    const used = [];
+    const g = k => { const x = CountryData.get(c.iso3, k); if (x && x.value !== null && x.value !== undefined) { used.push(x); return x.value; } return null; };
     const out = [];
     const gr = g('growth'), inf = g('infl'), un = g('unemp'), debt = g('debt'), ca = g('ca'), fis = g('fiscal');
-    if (gr !== null) out.push(gr < 0 ? `ekonomi diperkirakan menyusut (${fmt(gr, 1)}%)` : gr < 1.5 ? `pertumbuhan lemah (${fmt(gr, 1)}%)` : gr > 5 ? `pertumbuhan tinggi (${fmt(gr, 1)}%)` : `pertumbuhan moderat (${fmt(gr, 1)}%)`);
+    const grProj = (CountryData.get(c.iso3, 'growth') || {}).proj;
+    if (gr !== null) out.push(gr < 0 ? `ekonomi ${grProj ? 'diperkirakan ' : ''}menyusut (${fmt(gr, 1)}%)` : gr < 1.5 ? `pertumbuhan lemah (${fmt(gr, 1)}%)` : gr > 5 ? `pertumbuhan tinggi (${fmt(gr, 1)}%)` : `pertumbuhan moderat (${fmt(gr, 1)}%)`);
     if (inf !== null) out.push(inf > 10 ? `inflasi sangat tinggi (${fmt(inf, 1)}%)` : inf > 5 ? `inflasi tinggi (${fmt(inf, 1)}%)` : inf < 0 ? `deflasi (${fmt(inf, 1)}%)` : `inflasi terkendali (${fmt(inf, 1)}%)`);
     if (un !== null && un > 10) out.push(`pengangguran tinggi (${fmt(un, 1)}%)`);
     if (debt !== null && debt > 90) out.push(`utang pemerintah besar (${fmt(debt, 0)}% PDB)`);
@@ -370,7 +373,8 @@ const CountryPage = (() => {
     if (ca !== null) out.push(ca < -4 ? `defisit transaksi berjalan lebar (${fmt(ca, 1)}% PDB), rentan arus modal keluar` : ca > 4 ? `surplus transaksi berjalan (${fmt(ca, 1)}% PDB)` : '');
     const txt = out.filter(Boolean);
     if (!txt.length) return '';
-    return `<p class="lead">${qBadge('calculated')} Ringkasan angka ${THIS_YEAR} (estimasi IMF): ${esc(txt.join('; '))}.</p>`;
+    const basis = [...new Set(used.map(x => `${x.src || 'sumber'} ${x.year || ''}${x.proj ? ' (proyeksi)' : ''}`.trim()))].join(', ');
+    return `<p class="lead">${qBadge('calculated')} Ringkasan otomatis dari ${esc(basis)}: ${esc(txt.join('; '))}.</p>`;
   }
 
   async function fillDetail(c) {
@@ -404,7 +408,7 @@ const CountryPage = (() => {
       if (!c.cur) return;
       if (!r.ok) return add(`<div><dt>Kurs ${esc(c.cur)}/USD</dt><dd class="na" title="${esc(r.error)}">tidak tersedia</dd></div>`);
       const v = r.data.rates[c.cur];
-      add(`<div><dt>Kurs ${esc(c.cur)} per USD</dt><dd>${v ? Lineage.wrap({ label: 'Kurs ' + c.cur + '/USD', value: fmt(v, v > 100 ? 0 : 4), quality: r.stale ? 'stale' : 'eod', source: r.source, home: SOURCE_DEFS.fx.home, url: r.sourceUrl, asOf: r.data.asOf ? fmtTime(r.data.asOf) : '–', fetchedAt: r.fetchedAt, via: r.via, note: 'Kurs referensi harian, bukan kurs transaksi bank.' }, fmt(v, v > 100 ? 0 : 4)) : '<span class="na">–</span>'}</dd></div>`);
+      add(`<div><dt>Kurs ${esc(c.cur)} per USD</dt><dd>${v ? Lineage.wrap({ label: 'Kurs ' + c.cur + '/USD', value: fmt(v, v > 100 ? 0 : 4), quality: r.stale ? 'stale' : 'eod', source: r.source, home: (r.extra && r.extra.fallback) || r.provider === 'frankfurter' ? SOURCE_DEFS.frankfurter.home : SOURCE_DEFS.fx.home, url: r.sourceUrl, asOf: r.data.asOf ? fmtTime(r.data.asOf) : '–', fetchedAt: r.fetchedAt, via: r.via, note: 'Kurs referensi harian, bukan kurs transaksi bank.' }, fmt(v, v > 100 ? 0 : 4)) : '<span class="na">–</span>'}</dd></div>`);
     });
     CountryData.policyRates().then(r => {
       const key = EURO.has(c.iso2) ? 'XM' : c.iso2;
@@ -431,8 +435,10 @@ const CountryPage = (() => {
   async function newsTab(c) {
     const el = $('#cNews');
     el.innerHTML = '<p class="loading">Mengambil berita dari GDELT (dibatasi 1 permintaan per 5 detik)</p>';
-    const r = await CountryData.news(c, S.newsMode);
+    const alive = () => el.isConnected && S.sel === c.iso3 && S.tab === 'news';
+    const r = await CountryData.news(c, S.newsMode, undefined, alive);
     if (!el.isConnected || S.sel !== c.iso3) return;
+    if (r.cancelled) return;
     if (!r.ok) {
       el.innerHTML = unavailableBox('Berita ' + c.name, r, 'GDELT gratis tapi membatasi 1 permintaan per 5 detik. Kalau browser diblokir CORS, jalankan server lokal (npm start).');
       return;
@@ -453,8 +459,11 @@ const CountryPage = (() => {
         </div>
       </div>
       <div class="c-sec"><h3>Semua judul terbaru</h3><div class="list">${sum.analyzed.slice(0, 60).map(n => newsItem(n)).join('')}</div>${srcLine(r, 'judul, sumber, waktu, dan tautan saja')}</div>`;
-    CountryData.tone(c).then(t => {
-      const box = $('#cTone'); if (!box || !box.isConnected) return;
+    const toneBox = $('#cTone');
+    CountryData.tone(c, alive).then(t => {
+      if (t.cancelled) return;
+      /* kotak harus milik render negara ini; negara lain bisa sudah dipilih selama menunggu GDELT */
+      const box = $('#cTone'); if (!box || box !== toneBox || !box.isConnected || S.sel !== c.iso3) return;
       if (!t.ok || !t.data.length) { box.innerHTML = `<p class="hint">Tren nada 30 hari tidak tersedia${t.error ? ': ' + esc(t.error) : ''}.</p>`; return; }
       const pts = t.data.map((p, i) => ({ x: i, y: p.v }));
       const Wd = 520, Ht = 80, ys = pts.map(p => p.y), lo = Math.min(...ys, -1), hi = Math.max(...ys, 1);
@@ -556,7 +565,16 @@ const CountryPage = (() => {
       const list = rows();
       download('negara-semua.csv', toCsv([['iso3', 'negara', ...MACRO.map(m => m.key + '_' + m.unit), 'skor'], ...list.map(c => [c.iso3, c.name, ...MACRO.map(m => (CountryData.get(c.iso3, m.key) || {}).value ?? ''), CountryData.score(c.iso3).total ?? ''])]), 'text/csv');
     });
-    bus.on('countryData', () => { renderTable(); if (S.tab !== 'news') renderDetail(); });
+    /* data inti selesai dimuat: perbarui tabel. Detail hanya digambar ulang bila pengguna tidak
+       sedang mengetik/fokus di dalamnya (mis. kolom "Tambah negara" di tab Bandingkan) */
+    bus.on('countryData', () => {
+      renderTable();
+      if (S.tab === 'news') return;
+      const det = $('#cDetail');
+      if (det && det.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { S.pendingDetail = true; return; }
+      renderDetail();
+    });
+    $('#cDetail').addEventListener('focusout', () => { if (S.pendingDetail) { S.pendingDetail = false; setTimeout(() => { if (!$('#cDetail').contains(document.activeElement)) renderDetail(); }, 0); } });
   }
 
   return {

@@ -113,6 +113,15 @@ function build() {
   const jsFiles = readdirSync(jsDir).filter(f => f.endsWith('.js')).sort();
   const js = shared + jsFiles.map(f => `/* ===== ${f} ===== */\n` + read(join(jsDir, f))).join('\n');
 
+  /* ---------- halaman & gaya tambahan: src/pages/*.html dan src/css/*.css (urut nama file) ----------
+     Fitur baru menaruh halamannya di file sendiri supaya template utama tidak jadi satu file raksasa. */
+  const listDir = d => (existsSync(join(root, d)) ? readdirSync(join(root, d)).sort() : []);
+  const pageFiles = listDir('src/pages').filter(f => f.endsWith('.html'));
+  const cssFiles = listDir('src/css').filter(f => f.endsWith('.css'));
+  const pages = pageFiles.map(f => `<!-- ===== src/pages/${f} ===== -->\n` + read(join(root, 'src/pages', f))).join('\n');
+  const css = read(join(root, 'src/style.css')) + cssFiles.map(f => `\n/* ===== src/css/${f} ===== */\n` + read(join(root, 'src/css', f))).join('');
+  for (const f of pageFiles) if (/<script/i.test(read(join(root, 'src/pages', f)))) throw new BuildError(`src/pages/${f} tidak boleh berisi <script>; taruh kode di src/js`);
+
   const safe = s => s.replace(/<\/script/gi, '<\\/script');
   let html = read(join(root, 'src/template.html'));
   const put = (key, val) => {
@@ -120,7 +129,8 @@ function build() {
     html = html.replace(key, () => val);
   };
   put('/*__FONTS__*/', fonts);
-  put('/*__CSS__*/', read(join(root, 'src/style.css')));
+  put('/*__CSS__*/', css);
+  put('<!--__PAGES__-->', pages);
   put('/*__LWC__*/', safe(lwc));
   put('/*__D3__*/', safe(d3));
   put('/*__WORLD__*/', safe(world));
@@ -129,13 +139,13 @@ function build() {
   mkdirSync(join(root, 'dist'), { recursive: true });
   const out = join(root, 'dist/quant-terminal.html');
   writeFileSync(out, html);
-  return { out, jsFiles, size: statSync(out).size, shared: SHARED.map(s => s[1]) };
+  return { out, jsFiles, size: statSync(out).size, shared: SHARED.map(s => s[1]), pages: pageFiles.length, cssFiles: cssFiles.length };
 }
 
 try {
   const r = build();
   for (const w of warnings) console.warn('PERINGATAN: ' + w);
-  console.log(`OK ${r.out}  ${(r.size / 1024).toFixed(0)} KB  (${r.jsFiles.length} file JS, modul bersama: ${r.shared.join(', ')})`);
+  console.log(`OK ${r.out}  ${(r.size / 1024).toFixed(0)} KB  (${r.jsFiles.length} file JS, ${r.pages} halaman tambahan, ${r.cssFiles} file CSS tambahan, modul bersama: ${r.shared.join(', ')})`);
 } catch (e) {
   console.error('BUILD GAGAL: ' + e.message);
   if (!(e instanceof BuildError)) console.error(e.stack);

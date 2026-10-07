@@ -53,6 +53,7 @@ const SOURCE_DEFS = {
   digitraffic: { name: 'Digitraffic AIS (Baltik)', kind: 'Kapal live', direct: true, server: false, auth: 'tanpa kunci', quality: 'live', home: 'https://www.digitraffic.fi/en/marine-traffic/', limit: 'wajar; CC BY 4.0', fallback: null },
   usgs: { name: 'USGS Earthquakes', kind: 'Bencana', direct: true, server: true, auth: 'tanpa kunci', quality: 'live', home: 'https://earthquake.usgs.gov', limit: 'feed publik', fallback: null },
   gdacs: { name: 'GDACS', kind: 'Bencana', direct: false, server: true, auth: 'tanpa kunci (lewat server)', quality: 'delayed', home: 'https://www.gdacs.org', limit: 'feed publik', fallback: null },
+  frankfurter: { name: 'Frankfurter (kurs referensi ECB)', kind: 'Kurs', direct: true, server: false, auth: 'tanpa kunci', quality: 'eod', home: 'https://frankfurter.dev', limit: 'kurs referensi ECB, hari kerja' },
   fx: { name: 'ExchangeRate-API (open)', kind: 'Kurs', direct: true, server: true, auth: 'tanpa kunci', quality: 'eod', home: 'https://www.exchangerate-api.com', limit: 'update harian', fallback: 'frankfurter' },
   bis: { name: 'BIS policy rates', kind: 'Bank sentral', direct: false, server: true, auth: 'tanpa kunci (lewat server)', quality: 'eod', home: 'https://data.bis.org/topics/CBPOL', limit: '–', fallback: null },
   binance: { name: 'Binance (publik)', kind: 'Kripto', direct: true, server: true, auth: 'tanpa kunci', quality: 'live', home: 'https://www.binance.com', limit: 'bobot 6000/menit', fallback: 'coingecko' },
@@ -95,13 +96,24 @@ const Net = {
   _p: null,
   /* janji tunggal: semua pemanggil data menunggu deteksi server pertama selesai */
   ready() { return this._p || (this._p = this.detect()); },
+  async probe(base) {
+    try {
+      const h = await this.fetch(base + '/api/health', { timeout: 1800 });
+      return h && h.ok && h.app === 'QuantTerminal' ? { base, health: h } : null;
+    } catch { return null; }
+  },
+  /* pakai server s; "serverUp" hanya dikirim saat berubah dari tanpa server menjadi ada server */
+  use(s) {
+    const was = this.server;
+    this.server = s; this.checked = true;
+    bus.emit('server', s);
+    if (s && !was) bus.emit('serverUp', s);
+    return s;
+  },
   async detect() {
-    for (const base of this.candidates()) {
-      try {
-        const h = await this.fetch(base + '/api/health', { timeout: 1800 });
-        if (h && h.ok && h.app === 'QuantTerminal') { this.server = { base, health: h }; this.checked = true; bus.emit('server', this.server); return this.server; }
-      } catch { /* coba kandidat berikutnya */ }
-    }
+    for (const base of this.candidates()) { const s = await this.probe(base); if (s) return this.use(s); }
+    /* deteksi ulang (tombol "Coba lagi") tidak membuang server yang masih hidup */
+    if (this.server) { const again = await this.probe(this.server.base); if (again) return this.use(again); }
     this.server = null; this.checked = true; bus.emit('server', null);
     return null;
   },
@@ -113,9 +125,15 @@ function gate(id, gapMs) {
   const g = _gates[id] || (_gates[id] = { next: 0, chain: Promise.resolve() });
   return fn => {
     const job = g.chain.then(async () => {
+      /* permintaan yang tampilannya sudah berganti dibatalkan SEBELUM menunggu jeda, dan tidak
+         menggeser jadwal (tidak ada permintaan yang benar-benar dikirim) */
+      const dead = () => { if (fn.alive && !fn.alive()) { const e = new Error('dibatalkan: tampilan sudah berganti'); e.cancelled = true; throw e; } };
+      dead();
       const w = g.next - Date.now();
       if (w > 0) await new Promise(r => setTimeout(r, w));
-      try { return await fn(); } finally { g.next = Date.now() + gapMs; }
+      dead();
+      let sent = true;
+      try { return await fn(); } catch (e) { if (e.cancelled) sent = false; throw e; } finally { if (sent) g.next = Date.now() + gapMs; }
     });
     g.chain = job.catch(() => {});
     return job;
@@ -145,8 +163,26 @@ function cacheSet(key, e, persist) {
 /* ---------- pintu utama: ambil data dari satu penyedia ----------
    opts: { server: '/api/...', direct: 'https://...', fetcher: async () => raw (pengganti direct),
            parse: raw => data (hanya jalur langsung; server sudah mem-parse dengan parser yang sama),
-           post: data => bentuk ringkas (dipakai di KEDUA jalur), ttl, persist, key, headers, timeout } 
-   hasil: { ok, data, provider, source, via, fetchedAt, cached, stale, quality, sourceUrl, error } */
+           post: data => bentuk ringkas (dipakai di KEDUA jalur), ttl, persist, key, headers, timeout,
+           retries: jumlah coba ulang untuk gangguan sementara (bawaan 1; 0 untuk penyedia berantrean ketat),
+           swr: ms (stale-while-revalidate: salinan yang baru lewat ttl dipakai dulu sambil diperbarui
+                di belakang; pembaruan diumumkan lewat bus 'data' {key}),
+           alive: () => boolean (opsional; false = tampilan peminta sudah berganti, permintaan yang
+                  masih antre di gerbang rate limit dibatalkan supaya tidak menghambat yang baru) }
+   hasil: { ok, data, provider, source, via, fetchedAt, cached, stale, revalidating, quality, sourceUrl, error } */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* gangguan sementara = layak dicoba ulang: putus jaringan, batas waktu, server sibuk (503/504) */
+const transient = e => !e.cancelled && !e.parser && (e.status === 503 || e.status === 504 || (!e.status && /Batas waktu|Tidak bisa terhubung/.test(e.message || '')));
+async function withRetry(fn, retries) {
+  for (let a = 0; ; a++) {
+    try { return await fn(); }
+    catch (e) {
+      if (a >= retries || !transient(e)) throw e;
+      await sleep(400 * 2 ** a + Math.random() * 200);      // backoff eksponensial + jitter
+    }
+  }
+}
+const _neg = new Map();
 async function getData(id, opts) {
   if (!Net.checked) await Net.ready();
   const def = SOURCE_DEFS[id] || { name: id, quality: 'delayed' };
@@ -154,52 +190,98 @@ async function getData(id, opts) {
   const key = opts.key || id + '|' + (opts.server || opts.direct);
   const ttl = opts.ttl ?? 10 * 60e3;
   const cached = cacheGet(key);
-  if (cached && Date.now() - cached.t < ttl) {
+  const age = cached ? Date.now() - cached.t : Infinity;
+  if (cached && age < ttl) {
     st.cacheHits++;
     return { ...cached.r, cached: true };
   }
-  if (_inflight.has(key)) return _inflight.get(key);
-  const p = (async () => {
-    const errors = [];
-    const tryServer = opts.server && def.server !== false && Net.server;
-    const tryDirect = (opts.direct || opts.fetcher) && def.direct;
-    if (tryServer) {
-      const t0 = performance.now();
-      try {
-        const env = await Net.fetch(Net.server.base + opts.server, { timeout: opts.timeout || 35000 });
-        const ms = Math.round(performance.now() - t0);
-        mark(st, true, ms, 'server');
-        const r = {
-          ok: true, data: opts.post ? opts.post(env.data) : env.data, provider: id, source: env.source || def.name, via: 'server',
-          fetchedAt: env.fetchedAt || new Date().toISOString(), cached: !!env.cached, stale: !!env.stale,
-          quality: env.stale ? 'stale' : (opts.quality || env.quality || def.quality), sourceUrl: env.sourceUrl || '', extra: env,
-        };
-        if (!env.stale) cacheSet(key, { t: Date.now(), r }, opts.persist);
-        return r;
-      } catch (e) { errors.push('server: ' + e.message); mark(st, false, Math.round(performance.now() - t0), 'server', e); }
+  /* cache negatif: kegagalan total diingat sebentar supaya poller tidak menghantam sumber yang mati */
+  const neg = _neg.get(key);
+  if (!cached && neg && neg.until > Date.now()) return { ...neg.r, negCached: true };
+  const fresh = () => {
+    if (_inflight.has(key)) return _inflight.get(key);
+    const p = fetchFresh(id, opts, def, st, key, cached);
+    _inflight.set(key, p);
+    p.finally(() => _inflight.delete(key)).catch(() => {});
+    return p;
+  };
+  /* stale-while-revalidate: pakai salinan yang baru sedikit lewat ttl, perbarui di belakang */
+  if (cached && opts.swr && age < ttl + opts.swr) {
+    st.cacheHits++;
+    fresh().then(r => { if (r.ok && !r.stale) bus.emit('data', { key, r }); });
+    return { ...cached.r, cached: true, revalidating: true };
+  }
+  return fresh();
+}
+async function fetchFresh(id, opts, def, st, key, cached) {
+  const errors = [];
+  const tryServer = opts.server && def.server !== false && Net.server;
+  let tryDirect = (opts.direct || opts.fetcher) && def.direct;
+  let throttled = false;
+  const retries = opts.retries ?? (GAPS[id] ? 0 : 1);
+  if (tryServer) {
+    const t0 = performance.now();
+    try {
+      const srv = async () => {
+        if (opts.alive && !opts.alive()) { const e = new Error('dibatalkan: tampilan sudah berganti'); e.cancelled = true; throw e; }
+        const x = await Net.fetch(Net.server.base + opts.server, { timeout: opts.timeout || 35000 });
+        /* server menjawab 200 tapi menyatakan gagal: perlakukan sebagai gagal, jangan disimpan di cache */
+        if (x && x.ok === false) { const e = new Error(x.error && (x.error.message || x.error) || 'server: sumber gagal'); e.status = 502; throw e; }
+        return x;
+      };
+      srv.alive = opts.alive;
+      /* penyedia berbatas laju ketat (GDELT dll.) dikirim ke server satu per satu juga, supaya
+         permintaan tampilan lama bisa dibuang sebelum masuk antrean server */
+      const env = await withRetry(() => (GAPS[id] ? gate(id + '@srv', 0)(srv) : srv()), retries);
+      let data;
+      try { data = opts.post ? opts.post(env.data) : env.data; } catch (e) { e.parser = true; throw e; }
+      mark(st, true, Math.round(performance.now() - t0), 'server'); _neg.delete(key);
+      const r = {
+        ok: true, data, provider: id, source: env.source || def.name, via: 'server',
+        fetchedAt: env.fetchedAt || new Date().toISOString(), cached: !!env.cached, stale: !!env.stale,
+        quality: env.stale ? 'stale' : (opts.quality || env.quality || def.quality), sourceUrl: env.sourceUrl || '', extra: env,
+      };
+      if (!env.stale) cacheSet(key, { t: Date.now(), r }, opts.persist);
+      return r;
+    } catch (e) {
+      if (e.cancelled) return { ok: false, cancelled: true, data: null, provider: id, source: def.name, error: e.message, quality: 'unavailable' };
+      errors.push('server: ' + e.message);
+      mark(st, false, Math.round(performance.now() - t0), 'server', e);
+      /* server sedang menahan diri (rate limit/blokir/antrean penuh): jalur langsung dari browser
+         memakai IP publik yang sama, jadi JANGAN dipakai untuk mengakali batas itu */
+      if ([429, 418, 451].includes(e.status) || (e.status === 503 && /antrean|rate limit|dibatasi/i.test(e.message))) { throttled = true; tryDirect = false; }
+      ErrorLog.report(e.parser ? 'parser' : 'provider', `${def.name} (server): ${e.message}`, opts.server);
     }
-    if (tryDirect) {
-      const t0 = performance.now();
-      try {
-        const run = opts.fetcher ? opts.fetcher : () => Net.fetch(opts.direct, { timeout: opts.timeout || 20000, headers: opts.headers, as: opts.as || 'json' });
-        const raw = GAPS[id] ? await gate(id, GAPS[id])(run) : await run();
-        const parsed = opts.parse ? opts.parse(raw) : raw;
-        const data = opts.post ? opts.post(parsed) : parsed;
-        const ms = Math.round(performance.now() - t0);
-        mark(st, true, ms, 'langsung');
-        const r = { ok: true, data, provider: id, source: def.name, via: 'langsung', fetchedAt: new Date().toISOString(), cached: false, stale: false, quality: opts.quality || def.quality, sourceUrl: opts.direct };
-        cacheSet(key, { t: Date.now(), r }, opts.persist);
-        return r;
-      } catch (e) { errors.push('langsung: ' + e.message); mark(st, false, Math.round(performance.now() - t0), 'langsung', e); }
+  }
+  if (tryDirect) {
+    const t0 = performance.now();
+    try {
+      const run0 = opts.fetcher ? opts.fetcher : () => Net.fetch(opts.direct, { timeout: opts.timeout || 20000, headers: opts.headers, as: opts.as || 'json' });
+      const run = () => { if (opts.alive && !opts.alive()) { const e = new Error('dibatalkan: tampilan sudah berganti'); e.cancelled = true; throw e; } return run0(); };
+      run.alive = opts.alive;
+      const raw = await withRetry(() => (GAPS[id] ? gate(id, GAPS[id])(run) : run()), retries);
+      let data;
+      try { const parsed = opts.parse ? opts.parse(raw) : raw; data = opts.post ? opts.post(parsed) : parsed; }
+      catch (e) { e.parser = true; throw e; }
+      mark(st, true, Math.round(performance.now() - t0), 'langsung'); _neg.delete(key);
+      const r = { ok: true, data, provider: id, source: def.name, via: 'langsung', fetchedAt: new Date().toISOString(), cached: false, stale: false, quality: opts.quality || def.quality, sourceUrl: opts.direct };
+      cacheSet(key, { t: Date.now(), r }, opts.persist);
+      return r;
+    } catch (e) {
+      if (e.cancelled) return { ok: false, cancelled: true, data: null, provider: id, source: def.name, error: e.message, quality: 'unavailable' };
+      errors.push('langsung: ' + e.message);
+      mark(st, false, Math.round(performance.now() - t0), 'langsung', e);
+      ErrorLog.report(e.parser ? 'parser' : 'network', `${def.name} (langsung): ${e.message}`, opts.direct ? String(opts.direct).slice(0, 160) : '');
     }
-    if (!tryServer && !tryDirect) errors.push(def.direct ? 'tidak ada jalur' : 'butuh server lokal (npm start)');
-    if (cached) {                          // salinan lama: dipakai TAPI ditandai basi
-      return { ...cached.r, cached: true, stale: true, quality: 'stale', error: errors.join(' | ') };
-    }
-    return { ok: false, data: null, provider: id, source: def.name, error: errors.join(' | ') || 'gagal', quality: 'unavailable' };
-  })();
-  _inflight.set(key, p);
-  try { return await p; } finally { _inflight.delete(key); }
+  }
+  if (!tryServer && !tryDirect && !throttled) errors.push(def.direct ? 'tidak ada jalur' : 'butuh server lokal (npm start)');
+  if (cached) {                          // salinan lama: dipakai TAPI ditandai basi
+    return { ...cached.r, cached: true, stale: true, quality: 'stale', error: errors.join(' | ') };
+  }
+  const fail = { ok: false, data: null, provider: id, source: def.name, error: errors.join(' | ') || 'gagal', quality: 'unavailable', throttled };
+  _neg.set(key, { r: fail, until: Date.now() + (throttled ? 60e3 : opts.negTtl ?? 15e3) });
+  if (_neg.size > 500) _neg.delete(_neg.keys().next().value);
+  return fail;
 }
 function mark(st, ok, ms, via, err) {
   st.requests++; st.latency = ms; st.via = via;
@@ -217,7 +299,7 @@ const Lineage = {
     if (this.m.size > 4000) this.m.delete(this.m.keys().next().value);
     return id;
   },
-  /* tombol angka yang bisa diklik. o: {label, value, unit, source, url, asOf, fetchedAt, quality, formula, raw, note} */
+  /* tombol angka yang bisa diklik. o: {label, value, unit, currency, period, source, url, asOf, fetchedAt, quality, formula, raw, note} */
   wrap(o, html) { return `<button type="button" class="lin" data-lin="${this.add(o)}">${html}</button>`; },
   show(id, anchor) {
     const o = this.m.get(id);
@@ -233,6 +315,8 @@ const Lineage = {
       ['Diambil', o.fetchedAt ? `${esc(fmtTime(o.fetchedAt))} (${esc(fmtAge(o.fetchedAt))})` : '–'],
       ['Jalur', esc(o.via || '–')],
     ];
+    if (o.period) rows.splice(6, 0, ['Frekuensi', esc(o.period)]);
+    if (o.currency) rows.splice(2, 0, ['Mata uang', esc(o.currency)]);
     if (o.formula) rows.push(['Rumus / transformasi', esc(o.formula)]);
     if (o.raw !== undefined && o.raw !== null) rows.push(['Nilai mentah', `<code>${esc(typeof o.raw === 'string' ? o.raw : JSON.stringify(o.raw)).slice(0, 220)}</code>`]);
     if (o.note) rows.push(['Catatan', esc(o.note)]);
@@ -245,16 +329,24 @@ const Lineage = {
     pop.style.left = clamp(r.left, 8, innerWidth - pw - 8) + 'px';
     const below = r.bottom + 6, ph = pop.offsetHeight;
     pop.style.top = (below + ph > innerHeight - 8 ? Math.max(8, r.top - ph - 6) : below) + 'px';
+    this.opener = anchor;
     pop.querySelector('[data-close]').focus();
+  },
+  /* tutup dan kembalikan fokus ke angka yang membukanya (pengguna keyboard tidak kehilangan posisi) */
+  hide(returnFocus) {
+    const pop = document.getElementById('linPop');
+    if (!pop || pop.hidden) return;
+    pop.hidden = true;
+    if (returnFocus && this.opener && this.opener.isConnected) this.opener.focus();
   },
 };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-lin]');
   const pop = document.getElementById('linPop');
   if (b) { e.stopPropagation(); Lineage.show(b.dataset.lin, b); return; }
-  if (pop && !pop.hidden && (!pop.contains(e.target) || e.target.closest('[data-close]'))) pop.hidden = true;
+  if (pop && !pop.hidden && (!pop.contains(e.target) || e.target.closest('[data-close]'))) Lineage.hide(!!e.target.closest('[data-close]'));
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { const p = document.getElementById('linPop'); if (p && !p.hidden) p.hidden = true; } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') Lineage.hide(true); });
 
 /* ---------- kotak "tidak tersedia" yang menjelaskan sebabnya ---------- */
 function unavailableBox(what, res, hint) {
@@ -275,9 +367,5 @@ function download(name, text, type = 'text/plain') {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
-function toCsv(rows) {
-  return rows.map(r => r.map(v => {
-    const s = v === null || v === undefined ? '' : String(v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }).join(',')).join('\n');
-}
+/* aman dari injeksi rumus spreadsheet; lihat shared/csv.mjs (diuji) */
+function toCsv(rows) { return Csv.toCsv(rows); }

@@ -6,9 +6,10 @@
    Jalankan:  npm start   lalu buka http://localhost:8787
    ===================================================================== */
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import * as P from '../shared/parsers.mjs';
 import { loadEnv, Registry, Cache, Gate, Bucket, upstream, redact, IpLimiter, UpstreamError } from './lib/core.mjs';
@@ -18,7 +19,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...loadEnv(join(ROOT, '.env')), ...process.env };
 const PORT = +(env.PORT || 8787);
 const HOST = env.HOST || '127.0.0.1';
-const ORIGINS = new Set((env.ALLOWED_ORIGINS || 'http://localhost:5500,http://127.0.0.1:5500,null').split(',').map(s => s.trim()).filter(Boolean));
+/* Origin "null" (halaman file:// DAN iframe sandbox milik situs mana pun) TIDAK diizinkan bawaan:
+   kalau diizinkan, situs asing bisa membaca respons server ini. Buka aplikasi lewat
+   http://localhost:8787. Bila tetap ingin file://, set ALLOW_FILE_ORIGIN=1 (dengan risiko itu). */
+const ALLOW_FILE_ORIGIN = env.ALLOW_FILE_ORIGIN === '1';
+const ORIGINS = new Set((env.ALLOWED_ORIGINS || 'http://localhost:5500,http://127.0.0.1:5500').split(',').map(s => s.trim()).filter(o => o && o !== 'null'));
+if (ALLOW_FILE_ORIGIN) ORIGINS.add('null');
+/* nama host yang boleh dipakai di header Host (perlindungan DNS rebinding). Alamat IP selalu boleh. */
+const ALLOWED_HOSTS = new Set(['localhost', ...(env.ALLOWED_HOSTS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)]);
 const KEY = {
   aisstream: env.AISSTREAM_API_KEY || '',
   finnhub: env.FINNHUB_API_KEY || '',
@@ -54,7 +62,14 @@ const DEF = [
 for (const [id, meta] of DEF) reg.define(id, meta);
 
 /* GDELT: tepat 1 per 6 detik (limiter mereka ketat). Lainnya: ember token sesuai batas resmi. */
-const gates = { gdelt: new Gate(6000), coingecko: new Bucket(5, 0.4), finnhub: new Bucket(25, 0.9), yahoo: new Bucket(8, 2), worldbank: new Bucket(10, 5), imf: new Bucket(6, 3), fred: new Bucket(20, 1.8) };
+/* Binance: bobot 6000/menit; permintaan kita berbobot 2-5, jadi 10/detik masih jauh di bawah batas. */
+const gates = {
+  gdelt: new Gate(6000), coingecko: new Bucket(5, 0.4), finnhub: new Bucket(25, 0.9), yahoo: new Bucket(8, 2), worldbank: new Bucket(10, 5), imf: new Bucket(6, 3), fred: new Bucket(20, 1.8),
+  binance: new Bucket(20, 10), portwatch: new Bucket(3, 0.5), wikipedia: new Bucket(10, 5), fx: new Bucket(3, 0.2), bis: new Bucket(3, 0.2), usgs: new Bucket(5, 1), gdacs: new Bucket(3, 0.5),
+};
+const BINANCE_HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
+/* status yang berarti "berhenti dulu": 429 terlalu banyak, 418 IP diblokir Binance, 403/451 ditolak */
+const BACKOFF_MS = { 429: 90e3, 418: 15 * 60e3, 403: 10 * 60e3, 451: 60 * 60e3 };
 
 const ais = new AisHub({
   registry: reg, aisKey: KEY.aisstream,
@@ -66,13 +81,19 @@ class BadRequest extends Error { constructor(m) { super(m); this.status = 400; }
 const need = (v, re, name) => { if (typeof v !== 'string' || !re.test(v)) throw new BadRequest(`Parameter "${name}" tidak valid`); return v; };
 const opt = (v, re, def) => (v && re.test(v) ? v : def);
 
-/* panggil sumber lewat cache + antrean + catatan status */
-async function viaCache(provider, key, ttl, url, fetcher, extra = {}) {
+/* jeda (backoff) per penyedia+HOST: blokir di api.binance.com tidak boleh ikut memblokir
+   cermin data-api.binance.vision atau cadangan Frankfurter */
+const backoff = new Map();
+const hostOf = u => { try { return new URL(u).host; } catch { return ''; } };
+/* panggil sumber lewat cache + antrean + catatan status. opts.noStale: lihat Cache.wrap */
+async function viaCache(provider, key, ttl, url, fetcher, extra = {}, opts = {}) {
   const st = reg.get(provider);
-  if (st && st.backoffUntil > Date.now()) {
+  const bk = provider + '|' + hostOf(url);
+  const until = backoff.get(bk) || 0;
+  if (until > Date.now()) {
     const e = cache.peek(key);
-    if (e) return { ...wrapEnv(provider, url, { value: e.value, cached: true, stale: Date.now() - e.t > e.ttl, t: e.t }), ...extra };
-    throw new UpstreamError(`Penyedia ${provider} sedang dibatasi (rate limit) sampai ${new Date(st.backoffUntil).toLocaleTimeString('en-GB')}`, 429);
+    if (e && !opts.noStale) return { ...wrapEnv(provider, url, { value: e.value, cached: true, stale: Date.now() - e.t > e.ttl, t: e.t }), ...extra };
+    throw new UpstreamError(`${hostOf(url) || provider} sedang dibatasi (rate limit/blokir) sampai ${new Date(until).toLocaleTimeString('en-GB')}`, 429);
   }
   const r = await cache.wrap(key, ttl, async () => {
     const t0 = Date.now();
@@ -80,13 +101,26 @@ async function viaCache(provider, key, ttl, url, fetcher, extra = {}) {
       try { const v = await fetcher(); reg.ok(provider, Date.now() - t0); return v; }
       catch (e) {
         reg.fail(provider, e, Date.now() - t0);
-        if (e.status === 429 && st) st.backoffUntil = Date.now() + 90e3;
+        if (BACKOFF_MS[e.status]) { backoff.set(bk, Date.now() + BACKOFF_MS[e.status]); if (st) st.backoffUntil = Math.max(...[...backoff.entries()].filter(([k]) => k.startsWith(provider + '|')).map(([, v]) => v)); }
         throw e;
       }
     };
     return gates[provider] ? gates[provider].run(go) : go();
-  }, { onHit: () => reg.hit(provider) });
+  }, { onHit: () => reg.hit(provider), noStale: !!opts.noStale });
   return { ...wrapEnv(provider, url, r), ...extra };
+}
+/* coba beberapa host berurutan TANPA salinan lama; baru kalau semuanya gagal, pakai salinan
+   lama paling baru dari host mana pun (ditandai basi) */
+async function multiHost(provider, hosts, keyOf, urlOf, ttl, fetcher) {
+  let lastErr;
+  for (const h of hosts) {
+    const url = urlOf(h);
+    try { return await viaCache(provider, keyOf(h), ttl, url, () => fetcher(url), {}, { noStale: true }); }
+    catch (e) { lastErr = e; }
+  }
+  const copies = hosts.map(h => ({ h, e: cache.peek(keyOf(h)) })).filter(x => x.e && Date.now() - x.e.t < 7 * 86400e3).sort((a, b) => b.e.t - a.e.t);
+  if (copies.length) return { ...wrapEnv(provider, urlOf(copies[0].h), { value: copies[0].e.value, cached: true, stale: true, t: copies[0].e.t, error: String(lastErr && lastErr.message) }) };
+  throw lastErr;
 }
 function wrapEnv(provider, url, r) {
   const st = reg.get(provider) || {};
@@ -163,28 +197,33 @@ const ROUTES = {
   /* FRED: dengan kunci pakai API resmi; tanpa kunci pakai fredgraph.csv publik */
   '/api/fred': async q => {
     const ids = need(q.get('series'), /^[A-Z0-9_]{2,40}(,[A-Z0-9_]{2,40}){0,15}$/, 'series').split(',');
-    const start = opt(q.get('start'), /^\d{4}-\d{2}-\d{2}$/, new Date(Date.now() - 3 * 365 * 86400e3).toISOString().slice(0, 10));
+    /* dibulatkan ke tanggal 1 bulan itu: kunci cache tidak berganti tiap hari, jadi salinan lama tetap bisa dipakai saat FRED gagal */
+    const start = opt(q.get('start'), /^\d{4}-\d{2}-\d{2}$/, new Date(Date.now() - 3 * 365 * 86400e3).toISOString().slice(0, 10)).slice(0, 8) + '01';
     const freq = opt(q.get('freq'), /^m$/, '');      // m = ambil nilai akhir tiap bulan (hemat ukuran untuk riwayat panjang)
     const out = {};
     const errors = {};
-    let lastEnv = null;
-    for (const id of ids) {
+    /* paling banyak 4 seri sekaligus, batas waktu 12 detik per seri: total tetap di bawah batas klien */
+    let k = 0;
+    const one = async id => {
       const url = KEY.fred
         ? `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&observation_start=${start}&file_type=json&api_key=${KEY.fred}`
         : `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${start}`;
       try {
-        lastEnv = await viaCache('fred', 'fred:' + id + ':' + start + ':' + !!KEY.fred, 3 * 3600e3, url, async () =>
-          KEY.fred ? P.parseFredObs(await upstream(url)) : P.parseFredCsv(await upstream(url, { as: 'text' })));
-        out[id] = { data: freq === 'm' ? monthEnd(lastEnv.data) : lastEnv.data, fetchedAt: lastEnv.fetchedAt, stale: lastEnv.stale, sourceUrl: lastEnv.sourceUrl, freq: freq || 'asli' };
+        const env = await viaCache('fred', 'fred:' + id + ':' + start + ':' + !!KEY.fred, 3 * 3600e3, url, async () =>
+          KEY.fred ? P.parseFredObs(await upstream(url, { timeout: 12000 })) : P.parseFredCsv(await upstream(url, { as: 'text', timeout: 12000 })));
+        out[id] = { data: freq === 'm' ? monthEnd(env.data) : env.data, fetchedAt: env.fetchedAt, stale: env.stale, sourceUrl: env.sourceUrl, freq: freq || 'asli' };
       } catch (e) { errors[id] = String(e.message || e); }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, ids.length) }, async () => { while (k < ids.length) await one(ids[k++]); }));
     if (!Object.keys(out).length) throw new UpstreamError('FRED gagal: ' + Object.values(errors)[0], 502);
-    return { ok: true, provider: 'fred', source: reg.get('fred').name, quality: 'eod', fetchedAt: new Date().toISOString(), data: out, errors };
+    const anyStale = Object.values(out).some(x => x.stale);
+    return { ok: true, provider: 'fred', source: reg.get('fred').name, quality: anyStale ? 'stale' : 'eod', stale: Object.values(out).every(x => x.stale), fetchedAt: new Date().toISOString(), data: out, errors };
   },
 
   /* IMF PortWatch: transit harian di chokepoint (berbasis AIS, jeda ±4 hari) */
   '/api/portwatch/chokepoints': async q => {
-    const days = Math.min(+(opt(q.get('days'), /^\d{1,3}$/, '400')), 800);
+    /* nilai tetap supaya variasi parameter tidak membuat ratusan salinan cache */
+    const days = +opt(q.get('days'), /^(90|180|400|800)$/, '400');
     const base = 'https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query';
     return viaCache('portwatch', 'pw:' + days, 6 * 3600e3, base, async () => {
       const rows = [];
@@ -203,13 +242,16 @@ const ROUTES = {
     const b = opt(q.get('box'), /^-?\d+(\.\d+)?(,-?\d+(\.\d+)?){3}$/, '');
     const cls = opt(q.get('cls'), /^[a-z]{3,12}$/, '');
     const snap = ais.snapshot({ box: b ? b.split(',').map(Number) : null, cls: cls || null });
-    return { ok: true, provider: 'ais', source: 'AISStream.io + Digitraffic', quality: 'live', fetchedAt: snap.generatedAt, data: snap };
+    /* "live" hanya bila setidaknya satu umpan benar-benar mengirim data dalam 2-3 menit terakhir;
+       posisi lama (sampai 6 jam) tetap dikirim dengan waktu masing-masing (ts) */
+    const live = ais.freshness().anyFeedLive;
+    return { ok: true, provider: 'ais', source: 'AISStream.io + Digitraffic', quality: live ? 'live' : 'stale', stale: !live && snap.vessels.length > 0, fetchedAt: snap.generatedAt, data: snap };
   },
   '/api/ships/track': async q => {
     const mmsi = +need(q.get('mmsi'), /^\d{6,9}$/, 'mmsi');
     const t = ais.track(mmsi);
     if (!t) throw new UpstreamError('Kapal tidak ada di memori server (belum terlihat atau sudah >6 jam)', 404);
-    return { ok: true, provider: 'ais', source: t.src, quality: 'live', fetchedAt: new Date().toISOString(), data: t };
+    return { ok: true, provider: 'ais', source: t.src, quality: Date.now() - (t.ts || 0) <= 10 * 60e3 ? 'live' : 'stale', fetchedAt: new Date().toISOString(), data: t };
   },
 
   '/api/hazards': async () => {
@@ -219,8 +261,13 @@ const ROUTES = {
       viaCache('usgs', 'usgs:4.5w', 5 * 60e3, urlU, async () => P.parseUsgs(await upstream(urlU))),
       viaCache('gdacs', 'gdacs:events', 15 * 60e3, urlG, async () => P.parseGdacs(await upstream(urlG))),
     ]);
+    /* dua-duanya gagal = error sungguhan (bukan "OK dengan daftar kosong") */
+    if (u.status !== 'fulfilled' && g.status !== 'fulfilled') {
+      const e = new Error('USGS: ' + u.reason.message + ' | GDACS: ' + g.reason.message); e.status = 502; throw e;
+    }
+    const partStale = [u, g].some(x => x.status === 'fulfilled' && x.value.stale);
     return {
-      ok: u.status === 'fulfilled' || g.status === 'fulfilled', provider: 'hazards', source: 'USGS + GDACS', quality: 'live', fetchedAt: new Date().toISOString(),
+      ok: true, provider: 'hazards', source: 'USGS + GDACS', quality: partStale ? 'stale' : 'live', stale: [u, g].every(x => x.status !== 'fulfilled' || x.value.stale), fetchedAt: new Date().toISOString(),
       data: {
         usgs: u.status === 'fulfilled' ? u.value : { ok: false, error: String(u.reason.message) },
         gdacs: g.status === 'fulfilled' ? g.value : { ok: false, error: String(g.reason.message) },
@@ -230,11 +277,19 @@ const ROUTES = {
 
   '/api/fx': async () => {
     const url = 'https://open.er-api.com/v6/latest/USD';
-    try { return await viaCache('fx', 'fx:usd', 3600e3, url, async () => P.parseErApi(await upstream(url))); }
+    try { return await viaCache('fx', 'fx:usd', 3600e3, url, async () => P.parseErApi(await upstream(url)), {}, { noStale: true }); }
     catch (e) {
       const url2 = 'https://api.frankfurter.app/latest?from=USD';
-      const r = await viaCache('fx', 'fx:frank', 3600e3, url2, async () => P.parseFrankfurter(await upstream(url2)));
-      return { ...r, fallback: 'Frankfurter (ECB)', primaryError: String(e.message) };
+      try {
+        const r = await viaCache('fx', 'fx:frank', 3600e3, url2, async () => P.parseFrankfurter(await upstream(url2)), {}, { noStale: true });
+        return { ...r, source: 'Frankfurter (kurs referensi ECB)', sourceUrl: url2, fallback: 'Frankfurter (ECB)', primaryError: String(e.message) };
+      } catch (e2) {
+        /* dua-duanya gagal: salinan lama paling baru, ditandai basi */
+        const a = cache.peek('fx:usd'), b = cache.peek('fx:frank');
+        const best = [a && { e: a, url, src: null }, b && { e: b, url: url2, src: 'Frankfurter (kurs referensi ECB)' }].filter(Boolean).sort((x, y) => y.e.t - x.e.t)[0];
+        if (best && Date.now() - best.e.t < 7 * 86400e3) return { ...wrapEnv('fx', best.url, { value: best.e.value, cached: true, stale: true, t: best.e.t }), ...(best.src ? { source: best.src, fallback: 'Frankfurter (ECB)' } : {}) };
+        throw e2;
+      }
     }
   },
 
@@ -257,37 +312,20 @@ const ROUTES = {
   '/api/crypto/binance24h': async q => {
     const syms = need(q.get('symbols'), /^[A-Z0-9]{5,12}(,[A-Z0-9]{5,12}){0,20}$/, 'symbols').split(',');
     const enc = encodeURIComponent(JSON.stringify(syms));
-    const hosts = ['https://api.binance.com', 'https://data-api.binance.vision'];
-    let lastErr;
-    for (const h of hosts) {
-      const url = `${h}/api/v3/ticker/24hr?symbols=${enc}`;
-      try { return await viaCache('binance', 'bn:' + h + syms.join(','), 5e3, url, async () => P.parseBinance24h(await upstream(url, { timeout: 8000 }))); }
-      catch (e) { lastErr = e; }
-    }
-    throw lastErr;
+    return multiHost('binance', BINANCE_HOSTS, h => 'bn:' + h + syms.join(','), h => `${h}/api/v3/ticker/24hr?symbols=${enc}`, 5e3, async url => P.parseBinance24h(await upstream(url, { timeout: 8000 })));
   },
 
   '/api/crypto/klines': async q => {
     const sym = need(q.get('symbol'), /^[A-Z0-9]{5,12}$/, 'symbol');
     const iv = opt(q.get('interval'), /^(1m|5m|15m|1h|4h|1d|1w)$/, '1d');
-    const lim = Math.min(+opt(q.get('limit'), /^\d{1,4}$/, '365'), 1000);
-    let lastErr;
-    for (const h of ['https://api.binance.com', 'https://data-api.binance.vision']) {
-      const url = `${h}/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${lim}`;
-      try { return await viaCache('binance', 'kl:' + url, iv.endsWith('m') ? 30e3 : 5 * 60e3, url, async () => P.parseBinanceKlines(await upstream(url, { timeout: 10000 }))); }
-      catch (e) { lastErr = e; }
-    }
-    throw lastErr;
+    const lim = +need(q.get('limit') || '365', /^(60|90|120|180|260|288|365|500|720|1000)$/, 'limit');
+    const urlOf = h => `${h}/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${lim}`;
+    return multiHost('binance', BINANCE_HOSTS, h => 'kl:' + urlOf(h), urlOf, iv.endsWith('m') ? 30e3 : 5 * 60e3, async url => P.parseBinanceKlines(await upstream(url, { timeout: 10000 })));
   },
   '/api/crypto/depth': async q => {
     const sym = need(q.get('symbol'), /^[A-Z0-9]{5,12}$/, 'symbol');
-    let lastErr;
-    for (const h of ['https://api.binance.com', 'https://data-api.binance.vision']) {
-      const url = `${h}/api/v3/depth?symbol=${sym}&limit=100`;
-      try { return await viaCache('binance', 'dp:' + url, 2e3, url, async () => P.parseBinanceDepth(await upstream(url, { timeout: 8000 }))); }
-      catch (e) { lastErr = e; }
-    }
-    throw lastErr;
+    const urlOf = h => `${h}/api/v3/depth?symbol=${sym}&limit=100`;
+    return multiHost('binance', BINANCE_HOSTS, h => 'dp:' + urlOf(h), urlOf, 2e3, async url => P.parseBinanceDepth(await upstream(url, { timeout: 8000 })));
   },
   '/api/crypto/ohlc': async q => {
     const id = need(q.get('id'), /^[a-z0-9-]{2,40}$/, 'id');
@@ -307,7 +345,9 @@ const ROUTES = {
       profile: `stock/profile2?symbol=${sym}`, metric: `stock/metric?symbol=${sym}&metric=all`, insider: `stock/insider-transactions?symbol=${sym}`,
       earnings: `stock/earnings?symbol=${sym}`, news: `company-news?symbol=${sym}&from=${from}&to=${to}`, peers: `stock/peers?symbol=${sym}`, recommendation: `stock/recommendation?symbol=${sym}`,
     }[kind];
-    const parse = { profile: P.parseFinnhubProfile, metric: P.parseFinnhubMetric, insider: P.parseFinnhubInsider, earnings: P.parseFinnhubEarnings, news: P.parseFinnhubNews, peers: x => (Array.isArray(x) ? x.slice(0, 12) : []), recommendation: x => (Array.isArray(x) ? x.slice(0, 6) : []) }[kind];
+    const parse = { profile: P.parseFinnhubProfile, metric: P.parseFinnhubMetric, insider: P.parseFinnhubInsider, earnings: P.parseFinnhubEarnings, news: P.parseFinnhubNews, peers: x => (Array.isArray(x) ? x.filter(p => typeof p === 'string' && /^[A-Z0-9.\-]{1,12}$/.test(p)).slice(0, 12) : []),
+      /* dibentuk ulang: hanya angka dan periode tanggal yang diteruskan ke browser */
+      recommendation: x => (Array.isArray(x) ? x.slice(0, 6).map(r => ({ period: /^\d{4}-\d{2}-\d{2}$/.test(String(r.period)) ? String(r.period) : '', strongBuy: +r.strongBuy || 0, buy: +r.buy || 0, hold: +r.hold || 0, sell: +r.sell || 0, strongSell: +r.strongSell || 0 })) : []) }[kind];
     const url = `https://finnhub.io/api/v1/${path}&token=${KEY.finnhub}`;
     const ttl = kind === 'news' ? 15 * 60e3 : kind === 'metric' || kind === 'profile' ? 12 * 3600e3 : 3 * 3600e3;
     return viaCache('finnhub', 'fh:' + kind + ':' + sym, ttl, url, async () => parse(await upstream(url)));
@@ -319,10 +359,11 @@ const ROUTES = {
     const out = {}, errors = {};
     for (const s of syms) {
       const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${KEY.finnhub}`;
-      try { out[s] = (await viaCache('finnhub', 'fh:q:' + s, 15e3, url, async () => P.parseFinnhubQuote(await upstream(url), s))).data; }
+      try { const env = await viaCache('finnhub', 'fh:q:' + s, 15e3, url, async () => P.parseFinnhubQuote(await upstream(url), s)); if (env.data) out[s] = { ...env.data, stale: !!env.stale, fetchedAt: env.fetchedAt }; }
       catch (e) { errors[s] = String(e.message); }
     }
-    return { ok: true, provider: 'finnhub', source: 'Finnhub', quality: 'live', fetchedAt: new Date().toISOString(), data: out, errors };
+    const anyStale = Object.values(out).some(x => x.stale);
+    return { ok: true, provider: 'finnhub', source: 'Finnhub', quality: anyStale ? 'stale' : 'live', stale: anyStale && Object.values(out).every(x => x.stale), fetchedAt: new Date().toISOString(), data: out, errors };
   },
   '/api/yahoo/chart': async q => {
     if (!YAHOO) throw new UpstreamError('Sumber tidak resmi Yahoo dimatikan. Aktifkan dengan ENABLE_UNOFFICIAL_YAHOO=1 di .env bila kamu menerima risikonya.', 503);
@@ -346,15 +387,48 @@ const ROUTES = {
   },
 };
 
+/* ---------- rute tambahan per fitur: server/routes/*.mjs ----------
+   Setiap file mengekspor default (ctx) => ({ providers: [[id, meta]], gates: {id: Bucket}, connect: ['https://host'], routes: {'/api/x': async q => env} }).
+   Fitur baru cukup menambah file di sana; server.mjs tidak perlu diubah. */
+const CONNECT = new Set(['https://api.binance.com', 'https://data-api.binance.vision', 'https://api.coingecko.com', 'https://api.worldbank.org', 'https://www.imf.org', 'https://api.gdeltproject.org', 'https://earthquake.usgs.gov', 'https://open.er-api.com', 'https://api.frankfurter.app', 'https://meri.digitraffic.fi', 'https://services9.arcgis.com', 'https://en.wikipedia.org']);
+const CTX = { viaCache, multiHost, wrapEnv, upstream, need, opt, BadRequest, UpstreamError, P, KEY, env, cache, reg, gates, Gate, Bucket, redact, ROOT };
+const ROUTE_DIR = join(ROOT, 'server', 'routes');
+if (existsSync(ROUTE_DIR)) {
+  for (const f of readdirSync(ROUTE_DIR).filter(x => x.endsWith('.mjs')).sort()) {
+    const mod = await import(pathToFileURL(join(ROUTE_DIR, f)).href);
+    const out = (typeof mod.default === 'function' ? mod.default(CTX) : mod.default) || {};
+    for (const [id, meta] of out.providers || []) reg.define(id, meta);
+    for (const [id, g] of Object.entries(out.gates || {})) gates[id] = g;
+    for (const h of out.connect || []) if (/^https:\/\/[a-z0-9.-]+$/i.test(h)) CONNECT.add(h);
+    for (const [path, fn] of Object.entries(out.routes || {})) {
+      if (ROUTES[path]) throw new Error(`server/routes/${f}: rute ${path} sudah ada`);
+      if (!/^\/api\/[a-z0-9/_-]+$/.test(path)) throw new Error(`server/routes/${f}: nama rute tidak valid: ${path}`);
+      ROUTES[path] = fn;
+    }
+  }
+}
+
 /* ---------- HTTP ---------- */
 const HTML_FILE = join(ROOT, 'dist', 'quant-terminal.html');
+/* Skrip tertanam diizinkan lewat hash SHA-256 (dihitung dari file HTML), bukan 'unsafe-inline',
+   supaya HTML yang tersusup tidak bisa menjalankan skrip. Gambar hanya dari file sendiri/data:. */
+let htmlCache = { mtime: 0, buf: null, csp: '' };
+function loadHtml() {
+  const st = statSync(HTML_FILE);
+  if (htmlCache.mtime === st.mtimeMs && htmlCache.buf) return htmlCache;
+  const buf = readFileSync(HTML_FILE);
+  const hashes = [...buf.toString('utf8').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+    .map(m => `'sha256-${createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
+  htmlCache = { mtime: st.mtimeMs, buf, csp: CSP.replace("script-src 'self'", "script-src 'self' " + hashes.join(' ')) };
+  return htmlCache;
+}
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",           // kode tertanam di satu file HTML
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",              // atribut style dipakai untuk warna/ukuran dinamis
+  "img-src 'self' data:",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.binance.com https://data-api.binance.vision https://api.coingecko.com https://api.worldbank.org https://www.imf.org https://api.gdeltproject.org https://earthquake.usgs.gov https://open.er-api.com https://api.frankfurter.app https://meri.digitraffic.fi https://services9.arcgis.com https://en.wikipedia.org",
+  "connect-src 'self' " + [...CONNECT].join(' '),
   "frame-ancestors 'none'", "base-uri 'none'", "form-action 'self'",
 ].join('; ');
 
@@ -369,6 +443,13 @@ function send(req, res, status, body, type = 'application/json; charset=utf-8', 
   res.writeHead(status, headers);
   res.end(buf);
 }
+function hostOk(req) {
+  const h = String(req.headers.host || '').toLowerCase();
+  const name = h.startsWith('[') ? h.slice(0, h.indexOf(']') + 1) : h.replace(/:\d+$/, '');
+  if (!name) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f:.]+\]$/.test(name)) return true;   // alamat IP tidak bisa di-rebind
+  return ALLOWED_HOSTS.has(name);
+}
 function cors(req) {
   const o = req.headers.origin;
   if (!o) return {};
@@ -376,8 +457,17 @@ function cors(req) {
   return {};
 }
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://x');
+const server = createServer((req, res) => {
+  /* satu permintaan rusak tidak boleh menjatuhkan proses server */
+  handle(req, res).catch(e => {
+    try { if (!res.headersSent) send(req, res, 500, { ok: false, error: { code: 500, message: 'Kesalahan server' } }); else res.end(); } catch { /* koneksi sudah putus */ }
+    console.error('[server] permintaan gagal:', String(e && e.message || e).slice(0, 200));
+  });
+});
+async function handle(req, res) {
+  let url;
+  try { url = new URL(req.url, 'http://x'); } catch { return send(req, res, 400, { ok: false, error: { code: 400, message: 'URL tidak valid' } }); }
+  if (!hostOk(req)) return send(req, res, 421, { ok: false, error: { code: 421, message: 'Host tidak dikenal. Tambahkan ke ALLOWED_HOSTS di .env bila memang dipakai.' } });
   const ip = req.socket.remoteAddress || '?';
   const ch = cors(req);
   if (req.method === 'OPTIONS') { res.writeHead(204, { ...ch, 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' }); return res.end(); }
@@ -385,7 +475,8 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
     if (!existsSync(HTML_FILE)) return send(req, res, 500, 'dist/quant-terminal.html belum ada. Jalankan: npm run build', 'text/plain; charset=utf-8');
-    return send(req, res, 200, readFileSync(HTML_FILE), 'text/html; charset=utf-8', { 'Content-Security-Policy': CSP, 'X-Frame-Options': 'DENY' });
+    const h = loadHtml();
+    return send(req, res, 200, h.buf, 'text/html; charset=utf-8', { 'Content-Security-Policy': h.csp, 'X-Frame-Options': 'DENY' });
   }
   const route = ROUTES[url.pathname];
   if (!route) return send(req, res, 404, { ok: false, error: { code: 404, message: 'Rute tidak ada' } }, undefined, ch);
@@ -398,12 +489,13 @@ const server = createServer(async (req, res) => {
     const code = e.status && e.status >= 400 && e.status < 600 ? (e instanceof BadRequest ? 400 : e.status === 404 ? 404 : e.status === 503 ? 503 : e.status === 429 ? 429 : 502) : 502;
     send(req, res, code, { ok: false, error: { code, message: String(e.message || e).slice(0, 300) } }, undefined, ch);
   }
-});
+}
 
 export function start() {
   ais.start();
   server.listen(PORT, HOST, () => {
     console.log(`QuantTerminal server jalan di http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+    if (ALLOW_FILE_ORIGIN) console.warn('PERINGATAN: ALLOW_FILE_ORIGIN=1. Halaman file:// DAN iframe sandbox situs lain bisa membaca respons server ini.');
     console.log('Kunci terpasang:', Object.entries(KEY).map(([k, v]) => `${k}=${v ? 'ya' : 'tidak'}`).join(', '), '| Yahoo tidak resmi:', YAHOO ? 'AKTIF' : 'mati');
   });
   return server;

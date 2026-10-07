@@ -27,9 +27,23 @@ for (const i of INSTS) {
   }
 }
 
+/* dasar perubahan harga yang JUJUR: "hari ini" hanya untuk data sesi berjalan.
+   Harga penutupan FRED = perubahan penutupan terakhir; kripto = 24 jam bergulir. */
+function chgBasis(i) {
+  if (!i || !i.real) return i && i.quality === 'sim' ? 'simulasi, mode demo' : 'tanpa data nyata';
+  if (i.type === 'crypto') return '24 jam';
+  if (i.quality === 'eod') return 'penutupan ' + (i.asOf ? fmtDate(i.asOf) : 'terakhir');
+  if (i.quality === 'stale') return 'data basi';
+  return 'hari ini';
+}
+/* dua harga bisa dibandingkan perubahannya hanya bila sama-sama data sesi berjalan dan waktunya dekat */
+function comparableMove(a, b) {
+  const ok = i => i && i.real && !['eod', 'stale', 'sim', 'unavailable'].includes(i.quality) && i.asOf;
+  return ok(a) && ok(b) && Math.abs(Date.parse(a.asOf) - Date.parse(b.asOf)) < 18 * 3600e3;
+}
 const MarketData = (() => {
   const st = { crypto: 'idle', cryptoSrc: null, us: 'idle', yahoo: 'idle', fred: 'idle', errors: {} };
-  let cryptoTimer = null, usTimer = null, yhTimer = null;
+  let cryptoTimer = null, usTimer = null, yhTimer = null, cryptoGen = 0;
   const histCache = new Map();
 
   const RANK = { Binance: 4, Finnhub: 4, CoinGecko: 3, 'Yahoo (tidak resmi)': 2 };
@@ -37,8 +51,10 @@ const MarketData = (() => {
   function apply(inst, q) {
     if (!Number.isFinite(q.price) || q.price <= 0) return false;
     /* sumber berprioritas lebih rendah tidak menimpa data segar dari sumber lebih tinggi */
-    if (inst.real && rankOf(inst.srcName) > rankOf(q.srcName) && inst.asOf && Date.now() - Date.parse(inst.asOf) < 10 * 60e3) return false;
-    if (!inst.real) { inst.spark = []; }
+    if (inst.real && inst.quality !== 'stale' && rankOf(inst.srcName) > rankOf(q.srcName) && inst.asOf && Date.now() - Date.parse(inst.asOf) < 10 * 60e3) return false;
+    /* data nyata pertama: buang semua angka simulasi (mode demo) supaya buka/tertinggi/terendah
+       buatan tidak tercampur dengan harga asli */
+    if (!inst.real) { inst.spark = []; inst.open = inst.high = inst.low = inst.prev = inst.volume = NaN; inst.intra = []; inst.daily = []; }
     inst.real = true; inst.live = q.quality === 'live';
     inst.price = q.price;
     inst.prev = Number.isFinite(q.prev) ? q.prev : inst.prev;
@@ -46,7 +62,7 @@ const MarketData = (() => {
     inst.high = Number.isFinite(q.high) ? q.high : Math.max(Number.isFinite(inst.high) ? inst.high : q.price, q.price);
     inst.low = Number.isFinite(q.low) ? q.low : Math.min(Number.isFinite(inst.low) ? inst.low : q.price, q.price);
     if (Number.isFinite(q.volume)) inst.volume = q.volume;
-    inst.quality = q.quality; inst.srcName = q.srcName; inst.asOf = q.asOf || new Date().toISOString();
+    inst.quality = q.quality; inst.srcName = q.srcName; inst.asOf = q.asOf || new Date().toISOString(); inst.recvAt = Date.now();
     if (q.dp !== undefined) inst.dp = q.dp;
     if (!inst.spark.length || inst.spark[inst.spark.length - 1] !== q.price) { inst.spark.push(q.price); if (inst.spark.length > 40) inst.spark.shift(); }
     return true;
@@ -57,16 +73,34 @@ const MarketData = (() => {
     inst.srcName = State.demo ? 'Simulasi (mode demo)' : why || '';
   }
 
+  /* ---------------- kesegaran ----------------
+     Label "Live" hanya benar selama data terus datang. Bila sumber berhenti (gagal, polling
+     dimatikan, tab disembunyikan), harga terakhir tetap tampil tetapi diberi label "Basi". */
+  const STALE_AFTER = { Binance: 30e3, CoinGecko: 180e3, Finnhub: 90e3, 'Yahoo (tidak resmi)': 360e3 };
+  function sweep() {
+    const changed = [];
+    for (const i of INSTS) {
+      if (!i.real || i.quality === 'stale') continue;
+      const lim = STALE_AFTER[i.srcName];
+      if (lim && Date.now() - (i.recvAt || 0) > lim) { i.quality = 'stale'; i.live = false; changed.push(i); }
+    }
+    if (changed.length) { bus.emit('tick', changed); updateMode(); }
+  }
+  setInterval(sweep, 5000);
+
   /* ---------------- kripto ---------------- */
   const CR = STOCKS.filter(i => i.bn);
   async function pollCrypto() {
+    const gen = cryptoGen;
     const syms = CR.map(i => i.bn);
     const enc = encodeURIComponent(JSON.stringify(syms));
     let r = await getData('binance', {
       server: '/api/crypto/binance24h?symbols=' + syms.join(','), direct: `https://api.binance.com/api/v3/ticker/24hr?symbols=${enc}`,
       parse: Parsers.parseBinance24h, ttl: 3000, key: 'bn24',
     });
-    if (!r.ok && !Net.server) r = await getData('binance', { direct: `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${enc}`, parse: Parsers.parseBinance24h, ttl: 3000, key: 'bn24v' });
+    /* api.binance.com gagal (atau hanya ada salinan basi) tanpa server: coba cermin resmi data-api.binance.vision */
+    if ((!r.ok || r.stale) && !Net.server) r = await getData('binance', { direct: `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${enc}`, parse: Parsers.parseBinance24h, ttl: 3000, key: 'bn24v' });
+    if (gen !== cryptoGen) return st.crypto;          // polling sudah dihentikan/dimulai ulang selama menunggu
     const changed = [];
     if (r.ok && !r.stale) {
       for (const t of r.data) {
@@ -80,12 +114,13 @@ const MarketData = (() => {
         server: '/api/crypto/markets?per=50', direct: 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
         parse: Parsers.parseCoinGecko, ttl: 60e3, key: 'cgm',
       });
+      if (gen !== cryptoGen) return st.crypto;
       if (c.ok) {
         for (const i of CR) {
           const x = c.data.find(d => d.id === COINGECKO_ID[i.sym]); if (!x) continue;
           if (apply(i, { price: x.price, prev: Number.isFinite(x.chg24) ? x.price / (1 + x.chg24 / 100) : NaN, high: x.high24, low: x.low24, volume: x.vol / x.price, quality: c.stale ? 'stale' : 'delayed', srcName: 'CoinGecko', asOf: x.updated || c.fetchedAt })) changed.push(i);
         }
-        st.crypto = 'ok'; st.cryptoSrc = 'CoinGecko (cadangan)';
+        st.crypto = c.stale ? 'stale' : 'fallback'; st.cryptoSrc = 'CoinGecko (cadangan, tertunda)';
       } else {
         st.crypto = 'fail'; st.errors.crypto = (r.error || '') + ' | ' + (c.error || '');
         CR.forEach(i => unset(i, 'Binance dan CoinGecko tidak bisa diakses'));
@@ -101,12 +136,20 @@ const MarketData = (() => {
     if (!Net.server || !Net.server.health.keys.finnhub) { st.us = 'no-key'; return; }
     const r = await getData('finnhub', { server: '/api/quote?symbols=' + US_STOCKS.join(','), ttl: 10e3, key: 'fhq' });
     const changed = [];
+    let got = 0;
     if (r.ok) {
       for (const [sym, q] of Object.entries(r.data || {})) {
         const i = BY[sym]; if (!i || !q) continue;
-        if (apply(i, { price: q.price, prev: q.prev, open: q.open, high: q.high, low: q.low, quality: 'live', srcName: 'Finnhub', asOf: q.ts ? new Date(q.ts).toISOString() : r.fetchedAt })) changed.push(i);
+        /* Finnhub memberi harga transaksi terakhir. Di luar jam bursa itu harga lama: label "Tertunda", bukan "Live". */
+        const asOf = q.ts ? new Date(q.ts).toISOString() : r.fetchedAt;
+        const fresh = q.ts && Date.now() - q.ts < 15 * 60e3;
+        const quality = r.stale || q.stale ? 'stale' : fresh ? 'live' : 'delayed';
+        if (Number.isFinite(q.price) && q.price > 0) got++;
+        if (apply(i, { price: q.price, prev: q.prev, open: q.open, high: q.high, low: q.low, quality, srcName: 'Finnhub', asOf })) changed.push(i);
       }
-      st.us = 'ok';
+      /* server menjawab ok tapi tanpa satu pun harga (kunci salah/dicabut, Finnhub mati) = gagal */
+      if (!got) { st.us = 'fail'; st.errors.us = Object.values((r.extra && r.extra.errors) || {})[0] || 'Finnhub tidak mengembalikan harga'; }
+      else st.us = r.stale ? 'stale' : 'ok';
     } else { st.us = 'fail'; st.errors.us = r.error; }
     if (changed.length) bus.emit('tick', changed);
     updateMode();
@@ -125,9 +168,9 @@ const MarketData = (() => {
       if (!s || !s.data || s.data.length < 2) continue;
       const pts = s.data, last = pts[pts.length - 1], prev = pts[pts.length - 2];
       const i = BY[sym];
-      histCache.set('fred:' + sym, pts);
+      histCache.set('fred:' + sym, pts); histCache.set('fredStale:' + sym, !!(r.stale || s.stale));
       if (i.real && i.srcName && !/FRED/.test(i.srcName)) continue;   // sudah ada sumber lebih segar
-      if (apply(i, { price: last.value, prev: prev.value, open: NaN, high: NaN, low: NaN, quality: 'eod', srcName: 'FRED ' + sid + ' (penutupan ' + last.date + ')', asOf: last.date + 'T21:00:00Z' })) {
+      if (apply(i, { price: last.value, prev: prev.value, open: NaN, high: NaN, low: NaN, quality: r.stale || s.stale ? 'stale' : 'eod', srcName: 'FRED ' + sid + ' (penutupan ' + last.date + ')', asOf: last.date + 'T21:00:00Z' })) {
         i.spark = pts.slice(-40).map(p => p.value);
         changed.push(i);
       }
@@ -141,19 +184,21 @@ const MarketData = (() => {
   async function pollYahoo() {
     if (!Net.server || !Net.server.health.yahoo) { st.yahoo = 'off'; return; }
     st.yahoo = 'loading';
-    const finnhubOk = st.us === 'ok';
+    /* lewati saham AS hanya bila saham ITU punya harga Finnhub yang masih segar */
+    const hasFinnhub = inst => inst.srcName === 'Finnhub' && inst.quality !== 'stale';
     const changed = [];
     const order = [BY[State.sel], ...INSTS.filter(i => i.type === 'index'), ...INSTS].filter((x, k, a) => x && a.indexOf(x) === k);
     for (const inst of order) {
       if (inst.type === 'crypto') continue;
-      if (finnhubOk && US_STOCKS.includes(inst.sym)) continue;
+      if (US_STOCKS.includes(inst.sym) && hasFinnhub(inst)) continue;
       const ys = YAHOO_SYM[inst.sym]; if (!ys) continue;
       const r = await getData('yahoo', { server: `/api/yahoo/chart?symbol=${encodeURIComponent(ys)}&range=1d&interval=5m`, ttl: 55e3, key: 'yq:' + ys });
       if (!r.ok || !r.data) continue;
       const d = r.data, k = /GBp|ZAc|ILA/.test(d.currency || '') ? 0.01 : 1;
       const bars = d.bars.map(b => ({ ...b, open: b.open * k, high: b.high * k, low: b.low * k, close: b.close * k }));
       const hi = bars.length ? Math.max(...bars.map(b => b.high)) : NaN, lo = bars.length ? Math.min(...bars.map(b => b.low)) : NaN;
-      if (apply(inst, { price: d.price * k, prev: d.prev * k, open: bars[0] ? bars[0].open : NaN, high: hi, low: lo, volume: bars.reduce((a, b) => a + (b.volume || 0), 0), quality: r.stale ? 'stale' : 'unofficial', srcName: 'Yahoo (tidak resmi)', asOf: d.ts ? new Date(d.ts).toISOString() : r.fetchedAt })) {
+      const num = v => (Number.isFinite(v) ? v * k : NaN);       // null * k = 0 palsu; harus NaN
+      if (apply(inst, { price: num(d.price), prev: num(d.prev), open: bars[0] ? bars[0].open : NaN, high: hi, low: lo, volume: bars.reduce((a, b) => a + (b.volume || 0), 0), quality: r.stale ? 'stale' : 'unofficial', srcName: 'Yahoo (tidak resmi)', asOf: d.ts ? new Date(d.ts).toISOString() : r.fetchedAt })) {
         if (bars.length > 2) inst.spark = bars.slice(-40).map(b => b.close);
         bus.emit('tick', [inst]);                 // tampilkan segera, jangan tunggu semua simbol
         changed.push(inst);
@@ -176,7 +221,12 @@ const MarketData = (() => {
         server: `/api/crypto/klines?symbol=${inst.bn}&interval=${iv}&limit=${lim}`, direct: `https://api.binance.com/api/v3/klines?symbol=${inst.bn}&interval=${iv}&limit=${lim}`,
         parse: Parsers.parseBinanceKlines, ttl: iv.endsWith('m') ? 30e3 : 5 * 60e3, key: `kl:${inst.bn}:${iv}:${lim}`,
       });
-      if (r.ok && r.data.length) return { bars: r.data, quality: r.stale ? 'stale' : 'live', source: 'Binance klines ' + iv };
+      if (r.ok && r.data.length && !r.stale) return { bars: r.data, quality: 'live', source: 'Binance klines ' + iv };
+      if (!Net.server) {
+        const m = await getData('binance', { direct: `https://data-api.binance.vision/api/v3/klines?symbol=${inst.bn}&interval=${iv}&limit=${lim}`, parse: Parsers.parseBinanceKlines, ttl: iv.endsWith('m') ? 30e3 : 5 * 60e3, key: `klv:${inst.bn}:${iv}:${lim}` });
+        if (m.ok && m.data.length && !m.stale) return { bars: m.data, quality: 'live', source: 'Binance klines ' + iv + ' (data-api.binance.vision)' };
+      }
+      if (r.ok && r.data.length) return { bars: r.data, quality: 'stale', source: 'Binance klines ' + iv + ' (salinan lama)' };
       const id = COINGECKO_ID[inst.sym];
       const c = await getData('coingecko', { server: `/api/crypto/ohlc?id=${id}&days=${CG_DAYS[tf]}`, direct: `https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=${CG_DAYS[tf]}`, parse: Parsers.parseCoinGeckoOhlc, ttl: 10 * 60e3, key: `cgo:${id}:${CG_DAYS[tf]}` });
       if (c.ok && c.data.length) return { bars: c.data, quality: c.stale ? 'stale' : 'delayed', source: 'CoinGecko OHLC (tanpa volume)' + (tf === '5Y' ? ', maksimal 1 tahun' : '') };
@@ -197,7 +247,7 @@ const MarketData = (() => {
       if (pts && pts.length && tf !== '1D') {
         const cut = Date.now() - TF_DAYS[tf] * 86400e3;
         const bars = pts.filter(p => Date.parse(p.date) >= cut).map(p => { const t = Date.parse(p.date) / 1000; return { time: t, open: p.value, high: p.value, low: p.value, close: p.value, volume: 0 }; });
-        return { bars, quality: 'eod', source: 'FRED ' + FRED_INDEX[inst.sym] + ' (hanya harga penutupan)', closeOnly: true };
+        return { bars, quality: histCache.get('fredStale:' + inst.sym) ? 'stale' : 'eod', source: 'FRED ' + FRED_INDEX[inst.sym] + ' (hanya harga penutupan)', closeOnly: true };
       }
       if (tf === '1D') return { bars: [], quality: 'unavailable', error: 'FRED hanya punya data penutupan harian; grafik intraday butuh Yahoo (tidak resmi).' };
     }
@@ -210,23 +260,34 @@ const MarketData = (() => {
   function updateMode() {
     const chip = $('#modeChip'), txt = $('#modeText');
     const parts = [];
-    parts.push(st.crypto === 'ok' ? 'kripto live' : st.crypto === 'fail' ? 'kripto n/a' : 'kripto …');
+    const crStale = CR.some(i => i.real && i.quality === 'stale');
+    parts.push(st.crypto === 'ok' && !crStale ? 'kripto live' : st.crypto === 'fallback' ? 'kripto tertunda' : st.crypto === 'off' ? 'kripto dijeda' : st.crypto === 'fail' ? 'kripto n/a' : st.crypto === 'stale' || crStale ? 'kripto basi' : 'kripto …');
     const stocksReal = STOCKS.filter(i => i.type === 'stock' && i.real).length, nStocks = STOCKS.filter(i => i.type === 'stock').length;
     parts.push(stocksReal ? `saham ${stocksReal}/${nStocks} nyata` : State.demo ? 'saham simulasi' : 'saham n/a');
     txt.textContent = parts.join(', ');
-    chip.dataset.state = st.crypto === 'ok' && stocksReal ? 'live' : st.crypto === 'ok' ? 'mixed' : 'sim';
+    const crOk = st.crypto === 'ok' && !crStale;
+    chip.dataset.state = crOk && stocksReal ? 'live' : crOk || st.crypto === 'fallback' ? 'mixed' : 'sim';
     chip.title = 'Kripto: ' + (st.cryptoSrc || 'belum') + '. Saham AS: ' + st.us + '. Yahoo: ' + st.yahoo + '. FRED: ' + st.fred + (State.demo ? '. MODE DEMO aktif.' : '');
   }
 
   return {
     st, history, updateMode,
-    startCrypto() { if (cryptoTimer) return; pollCrypto(); cryptoTimer = setInterval(() => { if (!document.hidden) pollCrypto(); }, 5000); },
-    stopCrypto() { clearInterval(cryptoTimer); cryptoTimer = null; st.crypto = 'off'; updateMode(); },
+    startCrypto() { if (cryptoTimer) return; cryptoGen++; cryptoTimer = setInterval(() => { if (!document.hidden) pollCrypto(); }, 5000); pollCrypto(); },
+    stopCrypto() {
+      clearInterval(cryptoTimer); cryptoTimer = null; cryptoGen++; st.crypto = 'off';
+      /* harga terakhir tetap tampil, tetapi bukan lagi "Live" */
+      const changed = CR.filter(i => i.real && i.quality !== 'stale');
+      changed.forEach(i => { i.quality = 'stale'; i.live = false; });
+      if (changed.length) bus.emit('tick', changed);
+      updateMode();
+    },
     async startServerSources() {
       if (!Net.server) return;
-      const jobs = [pollUS(), loadFredIndices()];
+      /* Yahoo menunggu Finnhub selesai: kalau Finnhub berhasil, saham AS tidak diambil dari Yahoo */
+      const usThenYahoo = pollUS().then(() => (Net.server && Net.server.health.yahoo ? pollYahoo() : null));
+      const jobs = [usThenYahoo, loadFredIndices()];
       if (!usTimer) usTimer = setInterval(() => { if (!document.hidden) pollUS(); }, 20000);
-      if (Net.server.health.yahoo) { jobs.push(pollYahoo()); if (!yhTimer) yhTimer = setInterval(() => { if (!document.hidden) pollYahoo(); }, 90000); }
+      if (Net.server.health.yahoo && !yhTimer) yhTimer = setInterval(() => { if (!document.hidden && st.yahoo !== 'loading') pollYahoo(); }, 90000);
       await Promise.allSettled(jobs);
     },
   };

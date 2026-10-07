@@ -1,0 +1,26 @@
+  <!-- ============ HALAMAN: DETAIL ASET (perintah AAPL Q / GP / FA / NEWS ...) ============ -->
+  <section id="page-security" class="page security-grid" hidden aria-label="Detail aset">
+    <div class="sec-main" id="secMain">
+      <section class="card sec-head-card" aria-label="Kuotasi aset">
+        <div class="card-head">
+          <h2><span id="secSym">–</span> <span class="sec-name" id="secName"></span></h2>
+          <span class="spacer"></span>
+          <div class="sec-actions">
+            <button type="button" class="mini-btn" id="secWatch">Tambah ke watchlist</button>
+            <button type="button" class="mini-btn" id="secAlert">Buat alert</button>
+            <button type="button" class="mini-btn" id="secCmp">Bandingkan</button>
+            <button type="button" class="mini-btn" id="secRefresh">Muat ulang</button>
+          </div>
+        </div>
+        <div class="sec-head-body">
+          <div class="sec-meta" id="secMeta"></div>
+          <div class="sec-quote" id="secQuote"></div>
+        </div>
+      </section>
+      <section class="card sec-body-card" aria-label="Bagian detail aset">
+        <div class="card-head"><div class="tabs" role="tablist" id="secTabs" aria-label="Bagian detail aset"></div></div>
+        <div class="side-body" id="secBody"></div>
+      </section>
+    </div>
+    <section class="card sec-cmp-card" id="secCompare" aria-label="Bandingkan aset" hidden></section>
+  </section>

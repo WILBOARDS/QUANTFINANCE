@@ -349,7 +349,8 @@ const HoursView = (() => {
     return (m[1] === '+' ? 1 : -1) * ((+m[2]) * 60 + (+(m[3] || 0)));
   }
   function render() {
-    if (el.hidden) return;
+    if (el.hidden || $('#page-market').hidden) return;     // tidak terlihat: jangan bangun ulang
+    const focusMkt = el.contains(document.activeElement) ? document.activeElement.dataset.mkt : null;
     const now = new Date();
     const viewerOff = -now.getTimezoneOffset();
     const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -372,6 +373,7 @@ const HoursView = (() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     html += `<p class="h-note">Sumbu waktu mengikuti zona waktumu (${esc(tz)}). Menampilkan sesi reguler pada hari bursa, tanpa hari libur. Garis putih adalah sekarang.</p>`;
     el.innerHTML = html;
+    if (focusMkt) { const b = el.querySelector(`.hrow[data-mkt="${focusMkt}"]`); if (b) b.focus(); }   // fokus keyboard tidak hilang
   }
   el.addEventListener('click', e => {
     const b = e.target.closest('.hrow');

@@ -29,12 +29,26 @@ export class AisHub {
     this.reg = registry; this.key = aisKey; this.dtUser = digitrafficUser; this.dtOn = digitrafficEnabled; this.log = log;
     this.v = new Map();            // mmsi -> kapal
     this.msgs = 0; this.ws = null; this.wsState = 'off'; this.retry = 0; this.lastMsg = null;
-    this.dtLastPoll = null; this.dtFrom = Date.now() - 15 * 60e3; this.dtMetaAt = 0;
+    this.dtLastPoll = null; this.dtFrom = Date.now() - 15 * 60e3; this.dtMetaAt = 0; this.dtMetaTry = 0; this.dtBusy = false; this.dtMetaErr = null;
+    this.keyRejected = false;
   }
   start() {
     if (this.key) this.connect(); else this.wsState = 'no-key';
     if (this.dtOn) { this.pollDigitraffic(); setInterval(() => this.pollDigitraffic(), 60e3).unref(); }
     setInterval(() => this.prune(), 60e3).unref();
+    /* pengawas: WebSocket yang "terbuka" tapi diam lebih dari 2 menit dianggap putus */
+    setInterval(() => {
+      if (this.wsState === 'open' && this.ws && Date.now() - (this.lastMsgT || this.openedAt || 0) > 120e3) {
+        this.reg.fail('aisstream', new Error('Tidak ada pesan AIS selama 2 menit; menyambung ulang'));
+        try { this.ws.close(); } catch { /* sudah tertutup */ }
+      }
+    }, 30e3).unref();
+  }
+  /* kapal dianggap live bila posisinya <= 10 menit; lebih tua = tertunda/basi */
+  freshness() {
+    const now = Date.now(), recent = this.lastMsgT && now - this.lastMsgT < 120e3;
+    const dtRecent = this.dtLastPoll && now - Date.parse(this.dtLastPoll) < 180e3;
+    return { anyFeedLive: !!(recent || dtRecent) };
   }
 
   upsert(m, src) {
@@ -77,29 +91,41 @@ export class AisHub {
         BoundingBoxes: Object.values(AIS_BOXES).map(b => b.box),
         FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ShipStaticData'],
       }));
-      this.wsState = 'open'; this.retry = 0;
-      this.reg.ok('aisstream', 0);
+      /* jabat tangan selalu berhasil walau kuncinya salah; hitungan coba-ulang baru direset
+         setelah pesan posisi pertama yang sah (lihat onmessage) */
+      this.wsState = 'open'; this.openedAt = Date.now();
     };
     ws.onmessage = ev => {
       try {
         const txt = typeof ev.data === 'string' ? ev.data : Buffer.from(ev.data).toString('utf8');
         const j = JSON.parse(txt);
-        if (j.error) { this.reg.fail('aisstream', new Error(j.error)); return; }
+        if (j.error) {
+          if (/api ?key/i.test(j.error)) this.keyRejected = true;
+          this.reg.fail('aisstream', new Error(j.error)); return;
+        }
         const m = parseAisStream(j);
-        if (m) { this.upsert(m, 'aisstream'); this.msgs++; this.lastMsg = new Date().toISOString(); }
+        if (m) {
+          this.upsert(m, 'aisstream'); this.msgs++; this.lastMsgT = Date.now(); this.lastMsg = new Date(this.lastMsgT).toISOString();
+          if (this.retry) { this.retry = 0; }
+          if (this.msgs % 500 === 1) this.reg.ok('aisstream', 0);
+        }
       } catch { /* pesan rusak diabaikan */ }
     };
     ws.onerror = e => { this.reg.fail('aisstream', new Error(e.message || 'WebSocket error')); };
     ws.onclose = ev => {
-      this.wsState = 'closed';
-      if (ev.code === 1008 || /api ?key/i.test(ev.reason || '')) this.reg.fail('aisstream', new Error('Kunci ditolak: ' + (ev.reason || ev.code)));
-      const wait = Math.min(300e3, 5e3 * 2 ** this.retry++);
+      this.wsState = this.keyRejected ? 'key-rejected' : 'closed';
+      if (ev.code === 1008 || /api ?key/i.test(ev.reason || '')) { this.keyRejected = true; this.wsState = 'key-rejected'; this.reg.fail('aisstream', new Error('Kunci ditolak: ' + (ev.reason || ev.code))); }
+      /* kunci ditolak: coba lagi 30 menit kemudian (bukan tiap 5 detik); selain itu backoff eksponensial */
+      const wait = this.keyRejected ? 30 * 60e3 : Math.min(300e3, 5e3 * 2 ** this.retry++);
+      if (this.keyRejected) this.keyRejected = false;
       setTimeout(() => this.connect(), wait).unref();
     };
   }
 
   /* ---------- Digitraffic REST (tanpa kunci) ---------- */
   async pollDigitraffic() {
+    if (this.dtBusy) return;                           // jangan tumpang tindih bila permintaan sebelumnya lambat
+    this.dtBusy = true;
     const headers = { 'Digitraffic-User': this.dtUser, 'Accept-Encoding': 'gzip' };
     const t0 = Date.now();
     try {
@@ -107,17 +133,23 @@ export class AisHub {
       const loc = await upstream(`https://meri.digitraffic.fi/api/ais/v1/locations?from=${from}`, { headers, timeout: 30000 });
       for (const m of parseDigitrafficLocations(loc)) this.upsert(m, 'digitraffic');
       this.dtFrom = t0;
-      if (Date.now() - this.dtMetaAt > 15 * 60e3) {
-        const metaFrom = this.dtMetaAt ? this.dtMetaAt - 60e3 : Date.now() - 24 * 3600e3;
-        const meta = await upstream(`https://meri.digitraffic.fi/api/ais/v1/vessels?from=${metaFrom}`, { headers, timeout: 30000 });
-        for (const m of parseDigitrafficVessels(meta)) if (this.v.has(m.mmsi)) this.upsert(m, 'digitraffic');
-        this.dtMetaAt = Date.now();
-      }
       this.dtLastPoll = new Date().toISOString();
       this.reg.ok('digitraffic', Date.now() - t0);
     } catch (e) {
       this.reg.fail('digitraffic', e, Date.now() - t0);
     }
+    /* metadata (nama, tipe, tujuan) terpisah: kegagalannya tidak menandai posisi gagal, dan
+       dicoba ulang paling cepat 10 menit kemudian */
+    if (Date.now() - this.dtMetaAt > 15 * 60e3 && Date.now() - this.dtMetaTry > 10 * 60e3) {
+      this.dtMetaTry = Date.now();
+      try {
+        const metaFrom = this.dtMetaAt ? this.dtMetaAt - 60e3 : Date.now() - 24 * 3600e3;
+        const meta = await upstream(`https://meri.digitraffic.fi/api/ais/v1/vessels?from=${metaFrom}`, { headers, timeout: 30000 });
+        for (const m of parseDigitrafficVessels(meta)) if (this.v.has(m.mmsi)) this.upsert(m, 'digitraffic');
+        this.dtMetaAt = Date.now(); this.dtMetaErr = null;
+      } catch (e) { this.dtMetaErr = String(e.message || e).slice(0, 160); }
+    }
+    this.dtBusy = false;
   }
 
   /* ringkasan untuk browser: array ringkas supaya hemat ukuran */
@@ -136,7 +168,7 @@ export class AisHub {
       total: this.v.size,
       sources: [
         { id: 'aisstream', state: this.wsState, messages: this.msgs, lastMessage: this.lastMsg, configured: !!this.key, coverage: 'Global, hanya kotak pantau di sekitar selat penting; bergantung stasiun penerima sukarela' },
-        { id: 'digitraffic', state: this.dtOn ? (this.dtLastPoll ? 'polling' : 'starting') : 'off', lastPoll: this.dtLastPoll, configured: this.dtOn, coverage: 'Laut Baltik (Finlandia dan sekitarnya)' },
+        { id: 'digitraffic', state: this.dtOn ? (this.dtLastPoll ? 'polling' : 'starting') : 'off', lastPoll: this.dtLastPoll, configured: this.dtOn, coverage: 'Laut Baltik (Finlandia dan sekitarnya)', metadataError: this.dtMetaErr },
       ],
       boxes: AIS_BOXES,
       generatedAt: new Date().toISOString(),

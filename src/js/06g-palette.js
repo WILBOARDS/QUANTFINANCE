@@ -1,29 +1,11 @@
 /* =====================================================================
-   PALET PERINTAH (Ctrl+K) + PENCARIAN UNIVERSAL + PROFIL TOKOH PUBLIK
-   Contoh: AAPL · AAPL NEWS · BTC · INDONESIA · ID NEWS · COMPARE ID US CN
-           OIL · US10Y · SHIP HORMUZ · N RUPIAH · Jensen Huang
+   BILAH PERINTAH (header, Ctrl+K) + PROFIL TOKOH PUBLIK (Wikipedia)
+   Contoh: AAPL GP · AAPL FA · ID ECON · COMPARE ID US CN · WATCH AAPL
+           ALERT AAPL > 300 · US10Y · SHIP HORMUZ · N RUPIAH · Jensen Huang
    ===================================================================== */
-const COMMANDS = [
-  ['GLOBE', 'Buka globe intelijen 3D', () => App.showPage('intel')],
-  ['MARKET', 'Halaman pasar dan grafik', () => App.showPage('market')],
-  ['COUNTRY', 'Intelijen semua negara', () => App.showPage('country')],
-  ['NEWS', 'Terminal berita global', () => App.showPage('news')],
-  ['SHIP', 'Pergerakan kapal dan chokepoint', () => App.showPage('ships')],
-  ['MACRO', 'Makro AS, obligasi, komoditas, rezim pasar', () => App.showPage('macro')],
-  ['US10Y', 'Kurva imbal hasil obligasi AS', () => { App.showPage('macro'); setTimeout(() => $('.curve-card').scrollIntoView({ block: 'start' }), 50); }],
-  ['OIL', 'Harga minyak, gas, komoditas', () => { App.showPage('macro'); setTimeout(() => $('.cmdty-card').scrollIntoView({ block: 'start' }), 50); }],
-  ['REGIME', 'Rezim pasar risk on/off', () => { App.showPage('macro'); setTimeout(() => $('.regime-card').scrollIntoView({ block: 'start' }), 50); }],
-  ['CB', 'Bank sentral dunia', () => { App.showPage('macro'); setTimeout(() => $('.cb-card').scrollIntoView({ block: 'start' }), 50); }],
-  ['STRESS', 'Uji tekanan portofolio simulasi', () => { App.showPage('macro'); setTimeout(() => $('.stress-card').scrollIntoView({ block: 'start' }), 50); }],
-  ['CASH', 'Kas dan alokasi surplus', () => App.showPage('cash')],
-  ['SOURCES', 'Status sumber data dan API', () => App.showPage('sources')],
-  ['SETTINGS', 'Pengaturan (mode demo, server)', () => $('#btnSettings').click()],
-  ['HELP', 'Daftar perintah', null],
-];
-const CMD_ALIAS = { MAP: 'GLOBE', INTEL: 'GLOBE', PETA: 'GLOBE', PASAR: 'MARKET', NEGARA: 'COUNTRY', BERITA: 'NEWS', N: 'NEWS', KAPAL: 'SHIP', SHIPS: 'SHIP', MAKRO: 'MACRO', UST: 'US10Y', CURVE: 'US10Y', BOND: 'US10Y', BONDS: 'US10Y', BRENT: 'OIL', WTI: 'OIL', GAS: 'OIL', GOLD: 'OIL', COPPER: 'OIL', KOMODITAS: 'OIL', KAS: 'CASH', SUMBER: 'SOURCES', DATA: 'SOURCES' };
-
 /* ---------- profil tokoh publik (Wikipedia + berita GDELT) ---------- */
 const People = (() => {
+  let openSeq = 0;
   async function search(q) {
     return getData('wikipedia', {
       server: '/api/wiki/search?q=' + encodeURIComponent(q),
@@ -32,6 +14,7 @@ const People = (() => {
     });
   }
   async function open(title) {
+    const my = ++openSeq;                       // profil yang dibuka paling akhir yang menang
     let dlg = $('#personDlg');
     if (!dlg) {
       dlg = document.createElement('dialog'); dlg.id = 'personDlg'; dlg.className = 'person-dlg'; dlg.setAttribute('aria-label', 'Profil tokoh publik');
@@ -45,6 +28,7 @@ const People = (() => {
       direct: 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g, '_')),
       parse: Parsers.parseWikiSummary, ttl: 24 * 3600e3, persist: true, key: 'wk:' + title,
     });
+    if (my !== openSeq) return;
     if (!r.ok) { dlg.innerHTML = `<div class="dlg">${unavailableBox('Profil ' + title, r)}<div class="dlg-foot"><button type="button" class="btn" data-close>Tutup</button></div></div>`; return; }
     const p = r.data;
     const holdings = STOCKS.filter(i => p.extract.toLowerCase().includes(i.name.toLowerCase().split(' ')[0].toLowerCase()) && i.name.split(' ')[0].length > 4);
@@ -62,125 +46,103 @@ const People = (() => {
     const n = await getData('gdelt', {
       server: '/api/gdelt/doc?' + new URLSearchParams({ query, mode: 'artlist', timespan: '7d', maxrecords: '20', sort: 'DateDesc' }),
       direct: 'https://api.gdeltproject.org/api/v2/doc/doc?' + new URLSearchParams({ query, mode: 'artlist', format: 'json', timespan: '7d', maxrecords: '20', sort: 'DateDesc' }),
-      parse: Parsers.parseGdeltArticles, ttl: 30 * 60e3, persist: true, key: 'gdp:' + p.title,
+      parse: Parsers.parseGdeltArticles, ttl: 30 * 60e3, persist: true, key: 'gdp:' + p.title, alive: () => my === openSeq,
     });
-    const box = $('#personNews'); if (!box) return;
+    if (my !== openSeq) return;
+    const box = dlg.querySelector('#personNews'); if (!box) return;
     box.innerHTML = n.ok ? `<div class="list">${n.data.slice(0, 8).map(a => `<div><a class="item-title" href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a><div class="item-meta"><span>${esc(a.domain)}</span><span>${esc(fmtAge(a.seen))}</span></div></div>`).join('') || '<p class="hint">Tidak ada berita 7 hari terakhir.</p>'}</div>` : unavailableBox('Berita', n);
   }
   return { search, open };
 })();
 
-const Palette = (() => {
-  const dlg = $('#cmdk'), input = $('#cmdkInput'), list = $('#cmdkList');
-  let items = [], idx = 0, seq = 0;
-
-  function score(hay, q) {
-    hay = hay.toLowerCase(); q = q.toLowerCase();
-    if (hay === q) return 100;
-    if (hay.startsWith(q)) return 80;
-    if (hay.includes(' ' + q)) return 60;
-    if (hay.includes(q)) return 40;
-    return 0;
+/* =====================================================================
+   BILAH PERINTAH (header): pencarian global + perintah terminal dengan autocomplete.
+   Mesin parse/suggest ada di shared/commands.mjs (diuji di Node); di sini hanya UI.
+   - Ctrl+K atau / : fokus ke bilah. Panah atas/bawah: pilih saran. Enter: jalankan.
+   - Panah atas di bilah kosong: riwayat perintah. Esc: tutup daftar.
+   - Teks yang bukan perintah dicari di Wikipedia (tokoh/perusahaan) sebagai saran.
+   ===================================================================== */
+const CommandBar = (() => {
+  const input = $('#cmdInput'), drop = $('#cmdDrop'), wrap = $('#cmdBar');
+  let items = [], idx = -1, seq = 0, histPos = -1, msg = null;
+  const KIND = { entity: 'aset', verb: 'perintah', command: 'perintah', arg: 'pilihan', history: 'riwayat', wiki: 'Wikipedia' };
+  function setOpen(on) { drop.hidden = !on; input.setAttribute('aria-expanded', String(on)); }
+  function paint() {
+    const parts = [];
+    if (msg) parts.push(`<div class="cmd-msg ${msg.ok ? 'ok' : 'err'}" role="${msg.ok ? 'status' : 'alert'}">${esc(msg.text)}</div>`);
+    let g = null;
+    items.forEach((it, i) => {
+      const grp = it.group || KIND[it.kind] || '';
+      if (grp !== g) { g = grp; parts.push(`<div class="cmdk-group">${esc(g)}</div>`); }
+      parts.push(`<button type="button" class="cmdk-item" role="option" id="cmdOpt${i}" data-i="${i}" aria-selected="${i === idx}"><span class="code">${esc(it.label)}</span><span class="desc">${esc(it.detail || '')}</span><span class="kind">${esc(KIND[it.kind] || it.kind)}</span></button>`);
+    });
+    drop.innerHTML = parts.join('') || '<p class="hint" style="padding:8px 10px">Ketik kode (AAPL), perintah (AAPL GP, ID ECON, WATCH AAPL) atau HELP.</p>';
+    input.setAttribute('aria-activedescendant', idx >= 0 ? 'cmdOpt' + idx : '');
+    setOpen(true);
   }
-  function findCountry(tok) {
-    const t = tok.toUpperCase();
-    return C3.get(t) || C2.get(t) || COUNTRIES.find(c => c.en.toUpperCase() === t || c.name.toUpperCase() === t) || null;
-  }
-  function build(raw) {
-    const q = raw.trim();
-    const out = [];
-    const up = q.toUpperCase();
-    const toks = up.split(/\s+/).filter(Boolean);
-    const add = (group, code, desc, kind, run, s = 50) => out.push({ group, code, desc, kind, run, s });
-    if (!q) {
-      COMMANDS.forEach(([c, d, f]) => add('Perintah', c, d, 'buka', f || (() => input.value = 'HELP')));
-      return out;
-    }
-    /* perintah berbentuk "X Y" */
-    const head = CMD_ALIAS[toks[0]] || toks[0];
-    if (head === 'HELP') {
-      [['AAPL', 'Pilih saham/aset dan buka grafik'], ['AAPL NEWS', 'Berita tentang aset'], ['AAPL FA', 'Fundamental, insider, earnings (saham AS + Finnhub)'], ['ID ECON', 'Ekonomi negara (pakai kode ISO atau nama)'], ['ID NEWS', 'Berita dan spekulasi suatu negara'], ['COMPARE ID US CN', 'Bandingkan negara'], ['SHIP HORMUZ', 'Lompat ke selat'], ['N RUPIAH', 'Cari berita'], ['US10Y · OIL · REGIME · CB', 'Makro'], ['Jensen Huang', 'Profil tokoh publik (Wikipedia)']]
-        .forEach(([c, d]) => add('Bantuan', c, d, 'contoh', () => { input.value = c.split(' · ')[0]; render(); }));
-      return out;
-    }
-    if (head === 'COMPARE' && toks.length > 1) {
-      const cs = toks.slice(1).map(findCountry).filter(Boolean);
-      if (cs.length) add('Perintah', 'COMPARE', 'Bandingkan ' + cs.map(c => c.name).join(', '), 'negara', () => { CountryPage.compare(cs.map(c => c.iso3)); App.showPage('country'); }, 100);
-    }
-    if (head === 'SHIP' && toks.length > 1) add('Perintah', q, 'Lompat ke ' + toks.slice(1).join(' ') + ' di peta kapal', 'kapal', () => { App.showPage('ships'); ShipsPage.jump(toks.slice(1).join(' ')); }, 100);
-    if (head === 'NEWS' && toks.length > 1) add('Perintah', q, 'Cari berita: ' + q.split(/\s+/).slice(1).join(' '), 'berita', () => { App.showPage('news'); NewsPage.search(q.split(/\s+/).slice(1).join(' '), 'all'); }, 100);
-    const cmd = COMMANDS.find(c => c[0] === head);
-    if (cmd && toks.length === 1 && cmd[2]) add('Perintah', cmd[0], cmd[1], 'buka', cmd[2], 95);
-    if (['HORMUZ', 'SUEZ', 'MALAKA', 'MALACCA', 'PANAMA', 'BOSPORUS', 'SUNDA', 'LOMBOK', 'DOVER', 'TAIWAN', 'BALTIK'].includes(toks[0])) add('Perintah', toks[0], 'Lompat ke ' + toks[0].toLowerCase() + ' di peta kapal', 'kapal', () => { App.showPage('ships'); ShipsPage.jump(toks[0] === 'MALACCA' ? 'Malaka' : toks[0]); }, 96);
-
-    /* aset */
-    for (const i of INSTS) {
-      const s = Math.max(score(i.sym, toks[0]) * 1.2, score(i.name, q));
-      if (!s) continue;
-      const sub = toks[1];
-      if (sub === 'NEWS' || sub === 'N') add('Aset', i.sym + ' NEWS', 'Berita tentang ' + i.name, 'berita', () => { App.showPage('news'); NewsPage.search(i.name.split(' ')[0], i.type === 'crypto' ? 'crypto' : 'companies'); }, s + 20);
-      else if (['FA', 'DES', 'HOLDERS', 'INSIDERS', 'EARNINGS', 'OPTIONS'].includes(sub)) add('Aset', i.sym + ' ' + sub, (sub === 'OPTIONS' ? 'Opsi: tidak tersedia dari sumber gratis · ' : 'Intelijen perusahaan · ') + i.name, 'perusahaan', () => { bus.emit('pickSym', { sym: i.sym, go: true }); bus.emit('companyTab', sub === 'INSIDERS' || sub === 'HOLDERS' ? 'insider' : sub === 'EARNINGS' ? 'earnings' : 'fund'); }, s + 20);
-      else add('Aset', i.sym, i.name + (i.cur ? ' · ' + i.cur : '') + ' · ' + (QUALITY[i.quality] ? QUALITY[i.quality][0] : ''), i.type === 'index' ? 'indeks' : i.type === 'crypto' ? 'kripto' : 'saham', () => bus.emit('pickSym', { sym: i.sym, go: true }), s);
-    }
-    /* negara */
-    for (const c of COUNTRIES) {
-      const s = Math.max(score(c.iso3, toks[0]) * (toks[0].length === 3 ? 1.1 : 0.5), score(c.iso2, toks[0]) * (toks[0].length === 2 ? 1.05 : 0), score(c.name, q), score(c.en, q), score(c.capital, q) * 0.6);
-      if (s < 40) continue;
-      const sub = toks[toks.length - 1];
-      const tab = ['NEWS', 'N', 'BERITA'].includes(sub) && toks.length > 1 ? 'news' : 'overview';
-      add('Negara', c.iso2 + (tab === 'news' ? ' NEWS' : ' ECON'), c.name + ' · ' + (tab === 'news' ? 'berita dan spekulasi' : 'kondisi ekonomi') + (c.cur ? ' · ' + c.cur : ''), 'negara', () => { CountryPage.open(c.iso3, tab); App.showPage('country'); }, s + (tab === 'news' ? 10 : 0));
-      if (s >= 80 && tab === 'overview') add('Negara', c.iso2 + ' GLOBE', c.name + ' di globe 3D', 'globe', () => { App.showPage('intel'); IntelPage.focusCountry(c.iso3); }, s - 5);
-    }
-    /* bank sentral, komoditas, chokepoint, indikator */
-    for (const [k, nm] of Object.entries(CENTRAL_BANKS)) { const s = score(nm, q); if (s >= 40) add('Bank sentral', k, nm, 'bank sentral', () => { App.showPage('macro'); setTimeout(() => $('.cb-card').scrollIntoView({ block: 'start' }), 50); }, s); }
-    for (const [id, nm] of FRED_SETS.cmdty) { const s = score(nm, q); if (s >= 40) add('Komoditas', id, nm, 'FRED', () => { App.showPage('macro'); setTimeout(() => $('.cmdty-card').scrollIntoView(), 50); }, s); }
-    for (const c of CHOKE_REF) { const s = Math.max(score(c[1], q), score(c[2], q)); if (s >= 40) add('Chokepoint', c[2].toUpperCase(), c[1], 'kapal', () => { App.showPage('ships'); ShipsPage.jump(c[2]); }, s); }
-    for (const m of MACRO) { const s = score(m.label, q); if (s >= 40) add('Indikator', m.short, m.label + ' semua negara di globe', 'ekonomi', () => { Store.set('intelMetric', m.key); App.showPage('intel'); }, s); }
-    out.sort((a, b) => b.s - a.s);
-    return out.slice(0, 40);
-  }
-  function render() {
-    items = build(input.value);
-    idx = 0;
+  function suggest() {
+    const v = input.value;
+    msg = null; idx = -1; histPos = -1;
+    if (!v.trim()) {
+      const h = Terminal.history().slice(0, 6).map(x => ({ kind: 'history', label: x, detail: '', insert: x, group: 'Riwayat' }));
+      items = [...h, ...Commands.suggest('', REG, { limit: 10 }).map(s => ({ ...s, group: 'Perintah' }))];
+    } else items = Commands.suggest(v, REG, { limit: 14 }).map(s => ({ ...s, group: s.kind === 'entity' ? (REG.types[s.type] || 'Aset') : undefined }));
     paint();
-    const q = input.value.trim();
-    const my = ++seq;
-    /* tokoh publik: cari Wikipedia bila input terlihat seperti nama (2+ kata, bukan perintah) */
-    if (q.length >= 5 && /\s/.test(q) && !/^(COMPARE|SHIP|NEWS|N|HELP)\b/i.test(q) && !items.some(i => i.s >= 95)) {
-      clearTimeout(render._t);
-      render._t = setTimeout(async () => {
+    /* teks bebas yang tidak cocok apa pun: cari tokoh/perusahaan di Wikipedia */
+    const q = v.trim(), my = ++seq;
+    clearTimeout(suggest._t);
+    if (q.length >= 4 && /\s/.test(q) && !Commands.parse(q, REG).ok && !items.some(i => i.kind === 'verb')) {
+      suggest._t = setTimeout(async () => {
         const r = await People.search(q);
         if (my !== seq || !r.ok) return;
-        r.data.slice(0, 5).forEach(p => items.push({ group: 'Tokoh dan entitas (Wikipedia)', code: 'WIKI', desc: p.title + (p.snippet ? ' · ' + p.snippet.slice(0, 80) : ''), kind: 'profil', run: () => People.open(p.title), s: 10 }));
+        items.push(...r.data.slice(0, 5).map(p => ({ kind: 'wiki', label: p.title, detail: (p.snippet || '').slice(0, 90), group: 'Tokoh dan entitas (Wikipedia)', wiki: p.title })));
         paint();
       }, 450);
     }
   }
-  function paint() {
-    let html = '', g = null;
-    items.forEach((it, i) => {
-      if (it.group !== g) { g = it.group; html += `<div class="cmdk-group">${esc(g)}</div>`; }
-      html += `<button type="button" class="cmdk-item" role="option" data-i="${i}" aria-selected="${i === idx}"><span class="code">${esc(it.code)}</span><span class="desc">${esc(it.desc)}</span><span class="kind">${esc(it.kind)}</span></button>`;
-    });
-    list.innerHTML = html || `<p class="hint" style="padding:10px">Tidak ada hasil. Coba kode (AAPL), negara (Indonesia), atau ketik HELP.</p>`;
+  function show(text, ok) { msg = { text, ok }; items = ok ? [] : items; paint(); }
+  function execute(text) {
+    const r = Terminal.run(text);
+    if (r.ok) {
+      input.value = '';
+      if (r.message) { show(r.message, true); setTimeout(() => { if (msg && msg.ok) { msg = null; setOpen(false); } }, 3500); }
+      else { setOpen(false); input.blur(); }
+      return true;
+    }
+    /* gagal: tampilkan pesan dan saran yang bisa dipilih */
+    const sug = (r.parsed && r.parsed.suggestions) || [];
+    items = sug.slice(0, 6).map(e => ({ kind: 'entity', label: e.symbol || e.name, detail: e.name + ' · ' + (REG.types[e.type] || e.type), insert: e.symbol || e.name, group: 'Mungkin maksudmu' }));
+    show(r.message || 'Perintah tidak dikenal', false);
+    return false;
   }
-  function run(i) {
+  function choose(i) {
     const it = items[i]; if (!it) return;
-    if (it.run && it.group !== 'Bantuan') dlg.close();
-    it.run && it.run();
+    if (it.kind === 'wiki') { setOpen(false); People.open(it.wiki); return; }
+    if (it.incomplete) { input.value = it.insert; input.focus(); suggest(); return; }
+    input.value = it.insert;
+    execute(it.insert);
   }
-  function open(prefill) { input.value = prefill || ''; render(); if (!dlg.open) dlg.showModal(); input.focus(); }
-  input.addEventListener('input', render);
+  input.addEventListener('input', suggest);
+  input.addEventListener('focus', () => { suggest(); });
   input.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); paint(); list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); paint(); list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }
-    if (e.key === 'Enter') { e.preventDefault(); run(idx); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (drop.hidden) suggest(); idx = Math.min(idx + 1, items.length - 1); paint(); drop.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const h = Terminal.history();
+      if ((!input.value.trim() || histPos >= 0) && idx < 0 && h.length) { histPos = Math.min(histPos + 1, h.length - 1); input.value = h[histPos]; return; }
+      idx = Math.max(idx - 1, -1); paint();
+    }
+    else if (e.key === 'Tab' && idx >= 0 && items[idx] && items[idx].insert) { e.preventDefault(); input.value = items[idx].insert; suggest(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (idx >= 0) choose(idx); else if (input.value.trim()) execute(input.value); }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); input.blur(); }
   });
-  list.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) run(+b.dataset.i); });
-  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+  drop.addEventListener('mousedown', e => e.preventDefault());       // jangan hilangkan fokus input saat klik saran
+  drop.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) choose(+b.dataset.i); });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) setOpen(false); });
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); dlg.open ? dlg.close() : open(); }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); focus(); }
   });
-  $('#btnCmd').addEventListener('click', () => open());
-  return { open };
+  function focus(prefill) { if (prefill !== undefined) input.value = prefill; input.focus(); suggest(); }
+  $('#btnCmd').addEventListener('click', () => focus());
+  return { focus, fill: text => focus(text), run: execute };
 })();

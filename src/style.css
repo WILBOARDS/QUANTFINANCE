@@ -486,7 +486,7 @@
   .regime-card { grid-area: regime; } .curve-card { grid-area: curve; } .macro-card { grid-area: macro; }
   .cmdty-card { grid-area: cmdty; } .cb-card { grid-area: cb; } .corr-card { grid-area: corr; } .stress-card { grid-area: stress; }
   .macro-grid > .card { max-block-size: 560px; }
-  #page-macro, #page-sources { block-size: 100%; overflow-y: auto; }
+  #page-macro, #page-sources, #page-about { block-size: 100%; overflow-y: auto; }
   .sources { display: grid; gap: 10px; align-content: start; }
 
   @media (max-width: 1180px) {
@@ -503,7 +503,7 @@
     .clist-card { block-size: 560px; }
     .news-main { block-size: 640px; }
     .choke-card, .vessel-card { block-size: 460px; }
-    #page-macro, #page-sources { block-size: auto; overflow: visible; }
+    #page-macro, #page-sources, #page-about { block-size: auto; overflow: visible; }
   }
   @media (min-width: 1181px) and (max-height: 820px) {
     .intel-grid { height: auto; grid-template-rows: 560px 250px; }

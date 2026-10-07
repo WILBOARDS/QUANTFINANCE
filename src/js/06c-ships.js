@@ -30,7 +30,7 @@ function chokeRef(name) {
 const ShipData = (() => {
   const st = { ships: null, choke: null, mode: null };
   const local = new Map();                // untuk mode Digitraffic langsung: bangun jejak dari polling berturut-turut
-  let dtMetaAt = 0;
+  let dtMetaAt = 0, dtMetaTry = 0, dtMetaBusy = false;
 
   async function chokepoints() {
     const base = 'https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query';
@@ -88,12 +88,17 @@ const ShipData = (() => {
         if (!last || Math.abs(last[0] - m.lon) + Math.abs(last[1] - m.lat) > 0.0015) { v.trail.push([m.lon, m.lat, m.ts]); if (v.trail.length > 20) v.trail.shift(); }
         Object.assign(v, m);
       }
-      if (Date.now() - dtMetaAt > 15 * 60e3) {
-        const meta = await getData('digitraffic', { direct: `https://meri.digitraffic.fi/api/ais/v1/vessels?from=${Date.now() - 24 * 3600e3}`, headers, parse: Parsers.parseDigitrafficVessels, ttl: 15 * 60e3, key: 'dtmeta', timeout: 40000 });
-        if (meta.ok) {
-          dtMetaAt = Date.now();
-          for (const x of meta.data) { const v = local.get(x.mmsi); if (v) { v.name = x.name; v.shipType = x.shipType; v.dest = x.dest; v.imo = x.imo; v.cls = Parsers.shipClass(x.shipType, x.name); } }
-        }
+      /* metadata (nama, tipe, tujuan) diambil di LATAR BELAKANG: posisi tampil dulu, dan bila gagal
+         dicoba lagi paling cepat 10 menit kemudian (bukan tiap 10 detik) */
+      if (Date.now() - dtMetaAt > 15 * 60e3 && Date.now() - dtMetaTry > 10 * 60e3 && !dtMetaBusy) {
+        dtMetaTry = Date.now(); dtMetaBusy = true;
+        getData('digitraffic', { direct: `https://meri.digitraffic.fi/api/ais/v1/vessels?from=${Date.now() - 24 * 3600e3}`, headers, parse: Parsers.parseDigitrafficVessels, ttl: 15 * 60e3, key: 'dtmeta', timeout: 40000, retries: 0 })
+          .then(meta => {
+            if (!meta.ok) return;
+            dtMetaAt = Date.now();
+            for (const x of meta.data) { const v = local.get(x.mmsi); if (v) { v.name = x.name; v.shipType = x.shipType; v.dest = x.dest; v.imo = x.imo; v.cls = Parsers.shipClass(x.shipType, x.name); } }
+          })
+          .finally(() => { dtMetaBusy = false; });
       }
       const cut = Date.now() - 6 * 3600e3;
       for (const [k, v] of local) if (v.ts && v.ts < cut) local.delete(k);
@@ -107,12 +112,21 @@ const ShipData = (() => {
 })();
 
 /* ---------- panel detail (dipakai halaman Kapal dan Intel) ---------- */
-function shipPanel(v) {
+/* kualitas posisi satu kapal: live hanya bila umpan sedang segar DAN posisinya <= 10 menit */
+const SHIP_LIVE_MS = 10 * 60e3;
+function shipQuality(v) {
+  const snap = ShipData.st.ships;
+  return snap && snap.ok && !snap.stale && v.ts && Date.now() - v.ts <= SHIP_LIVE_MS ? 'live' : 'stale';
+}
+/* q = kualitas data panel; bawaan dihitung dari umur posisi kapal itu sendiri */
+function shipPanel(v, q) {
+  q = q || shipQuality(v);
   const navs = NAV_STATUS[v.navStatus] || (v.navStatus !== null && v.navStatus !== undefined ? 'Kode ' + v.navStatus : 'tidak dilaporkan');
   const L = (label, value, unit, extra = {}) => value === null || value === undefined || value === '' ? `<div><dt>${label}</dt><dd class="na">tidak dilaporkan</dd></div>` :
-    `<div><dt>${label}</dt><dd>${Lineage.wrap({ label: label + ' ' + (v.name || v.mmsi), value, unit, quality: 'live', source: v.src === 'digitraffic' ? 'Digitraffic AIS (Fintraffic)' : 'AISStream.io', home: v.src === 'digitraffic' ? SOURCE_DEFS.digitraffic.home : 'https://aisstream.io', asOf: v.ts ? fmtTime(new Date(v.ts).toISOString()) : '–', note: 'Dilaporkan sendiri oleh transponder AIS kapal; bisa salah atau dimatikan.', ...extra }, esc(String(value)) + (unit ? ' <small>' + esc(unit) + '</small>' : ''))}</dd></div>`;
-  return `<div><div class="bigscore"><strong style="font-size:20px;font-family:var(--font-ui)">${esc(v.name || 'Tanpa nama')}</strong></div>
-      <div class="item-meta"><span style="color:${SHIP_COLORS[v.cls] || '#93a8bf'}">● ${esc(SHIP_LABELS[v.cls] || v.cls)}</span><span>MMSI ${v.mmsi}</span>${v.imo ? `<span>IMO ${v.imo}</span>` : ''}${qBadge('live')}<span>${esc(fmtAge(v.ts))}</span></div></div>
+    `<div><dt>${label}</dt><dd>${Lineage.wrap({ label: label + ' ' + (v.name || v.mmsi), value, unit, quality: q, source: v.src === 'digitraffic' ? 'Digitraffic AIS (Fintraffic)' : 'AISStream.io', home: v.src === 'digitraffic' ? SOURCE_DEFS.digitraffic.home : 'https://aisstream.io', asOf: v.ts ? fmtTime(new Date(v.ts).toISOString()) : '–', note: 'Dilaporkan sendiri oleh transponder AIS kapal; bisa salah atau dimatikan.', ...extra }, esc(String(value)) + (unit ? ' <small>' + esc(unit) + '</small>' : ''))}</dd></div>`;
+  const staleNote = q === 'stale' ? `<p class="hint">Posisi terakhir diterima ${esc(fmtAge(v.ts))}; bukan posisi saat ini (kapal tidak melapor lagi, di luar jangkauan penerima, atau umpan AIS terputus).</p>` : '';
+  return `<div>${staleNote}<div class="bigscore"><strong style="font-size:20px;font-family:var(--font-ui)">${esc(v.name || 'Tanpa nama')}</strong></div>
+      <div class="item-meta"><span style="color:${SHIP_COLORS[v.cls] || '#93a8bf'}">● ${esc(SHIP_LABELS[v.cls] || v.cls)}</span><span>MMSI ${v.mmsi}</span>${v.imo ? `<span>IMO ${v.imo}</span>` : ''}${qBadge(q)}<span>${esc(fmtAge(v.ts))}</span></div></div>
     <dl class="kv">${L('Kecepatan', v.sog !== null && v.sog !== undefined ? fmt(v.sog, 1) : null, 'knot')}${L('Arah (COG)', v.cog !== null && v.cog !== undefined ? fmt(v.cog, 0) : null, '°')}${L('Haluan', v.heading !== null && v.heading !== undefined ? fmt(v.heading, 0) : null, '°')}
       ${L('Status navigasi', navs, '')}${L('Tujuan', v.dest || null, '')}${L('Posisi', fmt(v.lat, 4) + ', ' + fmt(v.lon, 4), '')}
       ${L('Kode tipe AIS', v.shipType ?? null, '', { note: '70-79 kargo, 80-89 tanker. AIS tidak membedakan kontainer/curah atau LNG/minyak.' })}${L('Titik jejak', v.trail ? v.trail.length : 0, 'posisi asli')}</dl>
@@ -121,6 +135,7 @@ function shipPanel(v) {
 }
 function chokePanel(k, res) {
   const s = k.series || [];
+  const cq = res && res.stale ? 'stale' : 'delayed';          // salinan lama PortWatch = Basi, bukan Tertunda
   const Wd = 340, Ht = 110, ys = s.map(p => p.total).filter(Number.isFinite);
   let chart = '';
   if (ys.length > 5) {
@@ -130,9 +145,9 @@ function chokePanel(k, res) {
     chart = `<div class="svgchart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Transit harian ${esc(k.name)}"><path d="${path('total')}" fill="none" stroke="#6fb1ff" stroke-width="1.2"/><path d="${path('tanker')}" fill="none" stroke="#ff9f6b" stroke-width="1.2"/></svg>
       <div class="lg"><span><i style="background:#6fb1ff"></i>Semua kapal</span><span><i style="background:#ff9f6b"></i>Tanker</span><span>${esc(s[0].date)} – ${esc(s[s.length - 1].date)}</span></div></div>`;
   }
-  const cell = (label, v, d = 0, note) => `<div><dt>${label}</dt><dd>${v === null || v === undefined || !Number.isFinite(v) ? '<span class="na">–</span>' : Lineage.wrap({ label: label + ' ' + k.name, value: fmt(v, d), quality: 'delayed', source: 'IMF PortWatch (Daily Chokepoints Data)', home: 'https://portwatch.imf.org', url: res && res.sourceUrl, asOf: 'hingga ' + k.lastDate, fetchedAt: res && res.fetchedAt, via: res && res.via, formula: note }, fmt(v, d))}</dd></div>`;
+  const cell = (label, v, d = 0, note) => `<div><dt>${label}</dt><dd>${v === null || v === undefined || !Number.isFinite(v) ? '<span class="na">–</span>' : Lineage.wrap({ label: label + ' ' + k.name, value: fmt(v, d), quality: cq, source: 'IMF PortWatch (Daily Chokepoints Data)', home: 'https://portwatch.imf.org', url: res && res.sourceUrl, asOf: 'hingga ' + k.lastDate, fetchedAt: res && res.fetchedAt, via: res && res.via, formula: note }, fmt(v, d))}</dd></div>`;
   return `<div><div class="bigscore"><strong style="font-size:20px;font-family:var(--font-ui)">${esc(k.name)}</strong></div>
-      <div class="item-meta">${qBadge('delayed', 'Data AIS diolah IMF, jeda sekitar 4 hari')}<span>data terakhir ${esc(k.lastDate)}</span></div></div>
+      <div class="item-meta">${k.lastDate ? `${qBadge(cq, 'Data AIS diolah IMF, jeda sekitar 4 hari')}<span>data terakhir ${esc(k.lastDate)}</span>` : `${qBadge('unavailable')}<span>Transit IMF PortWatch tidak tersedia; hanya lokasi selat yang ditampilkan.</span>`}</div></div>
     <dl class="kv">${cell('Transit hari terakhir', k.last)}${cell('Rata-rata 7 hari', k.avg7, 1, 'rata-rata n_total 7 hari terakhir')}
       <div><dt>vs rata-rata setahun</dt><dd class="${sign(k.chg)}">${Number.isFinite(k.chg) ? Lineage.wrap({ label: 'Perubahan transit ' + k.name, value: fmtPct(k.chg, 1), quality: 'calculated', source: 'IMF PortWatch', formula: 'rata-rata 7 hari ÷ rata-rata hari ke-8 s.d. 372 sebelumnya − 1', asOf: k.lastDate }, fmtPct(k.chg, 1)) : '–'}</dd></div>
       ${cell('Tanker (7 hari)', k.tanker7, 1)}${cell('Kontainer (7 hari)', k.container7, 1)}${cell('Curah kering (7 hari)', k.dryBulk7, 1)}</dl>
@@ -157,7 +172,8 @@ const ShipsPage = (() => {
   async function loadChoke() {
     $('#chokeWrap').innerHTML = '<p class="loading">Memuat IMF PortWatch</p>';
     const r = await ShipData.chokepoints();
-    if (!r.ok) { $('#chokeWrap').innerHTML = unavailableBox('Transit chokepoint (IMF PortWatch)', r); return; }
+    if (!r.ok) { S.chokeShown = false; $('#chokeWrap').innerHTML = unavailableBox('Transit chokepoint (IMF PortWatch)', r); return; }
+    S.chokeShown = true;
     const list = r.data.summary;
     S.globe.set('chokepoints', list);
     const spark = k => {
@@ -167,7 +183,7 @@ const ShipsPage = (() => {
       return `<svg class="spark" viewBox="0 0 62 24" preserveAspectRatio="none" aria-hidden="true" style="color:${k.chg < -0.1 ? 'var(--down)' : 'var(--ink-2)'}"><path d="${s.map((v, i) => (i ? 'L' : 'M') + (i / (s.length - 1) * 62).toFixed(1) + ' ' + (22 - (v - lo) / sp * 20).toFixed(1)).join(' ')}"/></svg>`;
     };
     $('#chokeWrap').innerHTML = `<table class="dense"><thead><tr><th>Chokepoint</th><th class="num">Hari terakhir</th><th class="num">Rata 7h</th><th class="num">vs 1 thn</th><th class="num">Tanker 7h</th><th class="num">Kontainer 7h</th><th>90 hari</th><th>Data s.d.</th></tr></thead><tbody>` +
-      list.map(k => `<tr data-choke="${esc(k.name)}" aria-selected="${S.sel && S.sel.type === 'chokepoint' && S.sel.item.name === k.name}"><td>${esc(k.name)}</td><td class="num">${fmt(k.last, 0)}</td><td class="num">${fmt(k.avg7, 1)}</td>
+      list.map(k => `<tr data-choke="${esc(k.name)}" tabindex="0" aria-selected="${S.sel && S.sel.type === 'chokepoint' && S.sel.item.name === k.name}"><td>${esc(k.name)}</td><td class="num">${fmt(k.last, 0)}</td><td class="num">${fmt(k.avg7, 1)}</td>
         <td class="num ${sign(k.chg)}">${Number.isFinite(k.chg) ? fmtPct(k.chg, 1) : '–'}</td><td class="num">${fmt(k.tanker7, 1)}</td><td class="num">${fmt(k.container7, 1)}</td><td>${spark(k)}</td><td class="num">${esc(k.lastDate)}</td></tr>`).join('') +
       `</tbody></table>` + `<div class="src-foot">${srcLine(r, 'jeda ±4 hari; vs 1 thn = rata 7 hari ÷ rata setahun sebelumnya − 1')}</div>`;
   }
@@ -175,6 +191,7 @@ const ShipsPage = (() => {
     const r = await ShipData.ships();
     const meta = $('#shipMeta');
     if (!r.ok) {
+      if (S.sel && S.sel.type === 'ship') $('#shipSide').innerHTML = shipPanel(S.sel.item, 'stale');
       S.vessels = [];
       S.globe.set('ships', []);
       meta.innerHTML = qBadge('unavailable') + ' Data AIS live tidak tersedia';
@@ -189,6 +206,12 @@ const ShipsPage = (() => {
     const srcTxt = (r.sources || []).map(s => `${s.id}: ${s.state}${s.messages ? ' (' + s.messages + ' pesan)' : ''}`).join(' · ');
     meta.innerHTML = `${qBadge(r.stale ? 'stale' : 'live')} ${fmt(r.vessels.length, 0)} kapal · ${esc(srcTxt)}`;
     renderVessels();
+    /* panel kapal terpilih ikut diperbarui; kalau kapalnya hilang dari data terbaru, labelnya jadi Basi */
+    if (S.sel && S.sel.type === 'ship') {
+      const fresh = r.vessels.find(x => x.mmsi === S.sel.item.mmsi);
+      if (fresh) S.sel = { type: 'ship', item: fresh };
+      $('#shipSide').innerHTML = shipPanel(S.sel.item, fresh && !r.stale ? undefined : 'stale');
+    }
   }
   function renderVessels() {
     const q = S.q.trim().toLowerCase();
@@ -199,7 +222,7 @@ const ShipsPage = (() => {
     list = [...list].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 400);
     $('#vesselWrap').innerHTML = !S.vessels.length ? '<p class="hint" style="padding:12px 14px">Belum ada posisi kapal diterima. AISStream baru mengirim data setelah ada kapal di kotak pantau; tunggu 1–2 menit.</p>' :
       `<table class="dense"><thead><tr><th>Kapal</th><th>Tipe</th><th class="num">Knot</th><th class="num">Arah</th><th>Tujuan</th><th class="num">Posisi</th><th>Update</th><th>Sumber</th></tr></thead><tbody>` +
-      list.map(v => `<tr data-mmsi="${v.mmsi}" aria-selected="${S.sel && S.sel.type === 'ship' && S.sel.item.mmsi === v.mmsi}"><td>${esc(v.name || '–')}<span class="sub">MMSI ${v.mmsi}</span></td><td><span style="color:${SHIP_COLORS[v.cls]}">●</span> ${esc(SHIP_LABELS[v.cls] || v.cls)}</td>
+      list.map(v => `<tr data-mmsi="${v.mmsi}" tabindex="0" aria-selected="${S.sel && S.sel.type === 'ship' && S.sel.item.mmsi === v.mmsi}"><td>${esc(v.name || '–')}<span class="sub">MMSI ${v.mmsi}</span></td><td><span style="color:${SHIP_COLORS[v.cls]}">●</span> ${esc(SHIP_LABELS[v.cls] || v.cls)}</td>
         <td class="num">${v.sog !== null && v.sog !== undefined ? fmt(v.sog, 1) : '–'}</td><td class="num">${v.cog !== null && v.cog !== undefined ? fmt(v.cog, 0) + '°' : '–'}</td><td>${esc((v.dest || '').slice(0, 20))}</td>
         <td class="num">${fmt(v.lat, 2)}, ${fmt(v.lon, 2)}</td><td>${esc(fmtAge(v.ts))}</td><td>${esc(v.src || '')}</td></tr>`).join('') +
       `</tbody></table><div class="src-foot">${total > 400 ? `Menampilkan 400 terbaru dari ${fmt(total, 0)} kapal yang cocok.` : `${fmt(total, 0)} kapal.`} Posisi asli dari transponder AIS.</div>`;
@@ -230,12 +253,22 @@ const ShipsPage = (() => {
   return {
     show() {
       build();
-      if (!ShipData.st.choke) loadChoke();
+      /* tabel chokepoint milik halaman ini; status bersama ShipData.st.choke bisa sudah diisi halaman Intel */
+      if (!S.chokeShown) loadChoke();
       loadShips();
       clearInterval(S.timer);
       S.timer = setInterval(() => { if (!$('#page-ships').hidden && !document.hidden) loadShips(); }, 10000);
     },
     hide() { clearInterval(S.timer); },
-    jump(name) { build(); const j = JUMPS.find(x => x[0].toLowerCase().startsWith(name.toLowerCase())); if (j) setTimeout(() => S.globe.flyTo(j[1], j[2], j[3]), 300); },
+    jump(name) {
+      build();
+      const n = String(name || '').toLowerCase();
+      const j = JUMPS.find(x => x[0].toLowerCase().startsWith(n));
+      if (j) { setTimeout(() => S.globe.flyTo(j[1], j[2], j[3]), 300); return true; }
+      /* selat yang tidak punya tombol lompat: pakai koordinat referensi CHOKE_REF */
+      const c = CHOKE_REF.find(r => r[0] === n || r[2].toLowerCase().startsWith(n) || r[1].toLowerCase().includes(n));
+      if (c) { setTimeout(() => S.globe.flyTo(c[4], c[3], 25), 300); return true; }
+      return false;
+    },
   };
 })();
