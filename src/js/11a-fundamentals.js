@@ -242,7 +242,7 @@ const FundView = (() => {
         <tr><td><b>Skor</b></td><td colspan="4">${score}</td></tr></tbody></table></div>
         <p class="hint">${esc(z.formula)} Ambang: aman &gt; ${esc(fmt(z.thresholds.safe, 2))}, tekanan &lt; ${esc(fmt(z.thresholds.distress, 2))}. ${esc(z.score === null ? (z.reason || '') : z.interpretation)}</p>`;
     };
-    return `<div class="fa-tools"><label class="meta" for="faFy">Tahun fiskal</label><select id="faFy" data-fa-fy>${years.map(y => `<option value="${y}"${y === fy ? ' selected' : ''}>FY${y}</option>`).join('')}</select>
+    return `<div class="fa-tools"><label class="meta" for="faFy">Tahun fiskal</label><span class="sel-wrap"><select id="faFy" data-fa-fy>${years.map(y => `<option value="${y}"${y === fy ? ' selected' : ''}>FY${y}</option>`).join('')}</select></span>
         <span class="spacer"></span><button type="button" class="mini-btn" data-fa-calc-all>Buka semua perhitungan</button></div>
       <h3 class="fa-h3">Piotroski F-score FY${esc(fy)} ${qBadge('calculated')}</h3>
       <p class="fa-score"><b>${esc(P.text)}</b>${P.missing ? ` · ${esc(P.missing)} kriteria Data kurang: skor TIDAK dinormalisasi ke 9` : ''}</p>

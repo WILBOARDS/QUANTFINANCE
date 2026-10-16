@@ -28,13 +28,20 @@ const MarketList = (() => {
         <td class="num">${p.value === null ? `<span class="na" title="${esc('Tidak tersedia: ' + (p.reason || q.reason || 'tanpa sumber'))}">Tidak tersedia</span>` : datumHtml(p, { dp: cfg.dp ? cfg.dp(e, p.value) : 2, label: e.symbol })}</td>
         <td class="num">${chgCell}</td>
         <td>${datumAge(p)}</td>
-        <td class="wrap mk-src">${esc(p.value === null ? (p.reason || q.reason || '') : p.source || '')}${q.note ? `<span class="sub">${esc(q.note)}</span>` : ''}${e.note ? `<span class="sub">${esc(e.note)}</span>` : ''}</td>
+        <td class="wrap mk-src">${esc(p.value === null ? (p.reason || q.reason || '') : p.source || '')}${q.note ? `<span class="sub mk-qn">${esc(q.note)}</span>` : ''}${e.note ? `<span class="sub">${esc(e.note)}</span>` : ''}</td>
         <td><button type="button" class="mini-btn" data-mk-open-row aria-label="Buka detail ${esc(e.symbol)}">Detail</button></td></tr>`;
     }
     function draw() {
       const list = ents();
       $p('Body').innerHTML = `<table class="dense mk-tbl"><caption class="sr">${esc(cfg.title)}</caption><thead><tr><th scope="col">Kode</th><th scope="col" class="num">${esc(cfg.valueLabel || 'Harga')}</th><th scope="col" class="num">${cfg.bp ? 'Perubahan' : 'Perubahan %'}</th><th scope="col">Kualitas / umur</th><th scope="col">Sumber</th><th scope="col"><span class="sr">Aksi</span></th></tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table>`;
       const done = [...S.rows.values()], ok = done.filter(q => q.price && q.price.value !== null).length;
+      /* catatan sumber yang berulang di 2+ baris: sembunyikan per baris, tulis sekali di bawah tabel */
+      const cnt = new Map();
+      for (const q of done) if (q && q.note) cnt.set(q.note, (cnt.get(q.note) || 0) + 1);
+      const shared = [...cnt].filter(([, n]) => n > 1);
+      $p('Body').querySelectorAll('.mk-qn').forEach(x => { x.hidden = shared.some(([t]) => t === x.textContent); });
+      $p('Common').innerHTML = shared.map(([t, n]) => `<li>${esc(t)} <span class="meta">(${n} baris)</span></li>`).join('');
+      $p('Common').hidden = !shared.length;
       $p('Meta').textContent = `${ok} dari ${list.length} punya data${S.at ? ' · diperbarui ' + fmtAge(S.at) : ''}`;
       if (cfg.extra) cfg.extra(S, $p('Extra'));
     }

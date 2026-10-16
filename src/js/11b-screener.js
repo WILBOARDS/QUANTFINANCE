@@ -114,8 +114,8 @@ const ScreenerPage = (() => {
       const v = x => (Number.isFinite(x) ? String(isPct(k) ? +(x * 100).toFixed(4) : x) : '');
       const on = Number.isFinite(f.min) || Number.isFinite(f.max);
       return `<div class="scr-f${on ? ' on' : ''}"><span title="${esc(m.formula || m.label)}">${esc(m.label)}${u ? ' (' + u + ')' : ''}</span>
-        <input type="number" step="any" inputmode="decimal" data-f="${k}" data-b="min" value="${esc(v(f.min))}" placeholder="min" aria-label="${esc(m.label)} minimum${u ? ' (' + u + ')' : ''}">
-        <input type="number" step="any" inputmode="decimal" data-f="${k}" data-b="max" value="${esc(v(f.max))}" placeholder="maks" aria-label="${esc(m.label)} maksimum${u ? ' (' + u + ')' : ''}"></div>`;
+        <input class="mini-input" type="number" step="any" inputmode="decimal" data-f="${k}" data-b="min" value="${esc(v(f.min))}" placeholder="min" aria-label="${esc(m.label)} minimum${u ? ' (' + u + ')' : ''}">
+        <input class="mini-input" type="number" step="any" inputmode="decimal" data-f="${k}" data-b="max" value="${esc(v(f.max))}" placeholder="maks" aria-label="${esc(m.label)} maksimum${u ? ' (' + u + ')' : ''}"></div>`;
     }).join('');
   }
   function readFilters() {
@@ -131,7 +131,7 @@ const ScreenerPage = (() => {
     return f;
   }
   const filterText = f => Object.entries(f).map(([k, x]) => {
-    const m = SC.METRICS[k], s = v => show(v, m.fmt === 'score' ? 'n' : m.fmt);
+    const m = SC.METRICS[k], s = v => (v === 0 ? '0' : show(v, m.fmt === 'score' ? 'n' : m.fmt));
     return `${m.label}${Number.isFinite(x.min) ? ' > ' + s(x.min) : ''}${Number.isFinite(x.min) && Number.isFinite(x.max) ? ' dan' : ''}${Number.isFinite(x.max) ? ' < ' + s(x.max) : ''}`;
   }).join('; ') || 'tanpa filter';
 

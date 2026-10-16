@@ -6,18 +6,18 @@
         <span class="meta" id="pfMeta" role="status"></span>
         <span class="spacer"></span>
         <label class="meta" for="pfBase">Mata uang dasar</label>
-        <select id="pfBase"><option value="USD">USD</option><option value="IDR">IDR</option></select>
+        <span class="sel-wrap"><select id="pfBase"><option value="USD">USD</option><option value="IDR">IDR</option></select></span>
         <button type="button" class="mini-btn" id="pfRefresh">Muat ulang</button>
         <button type="button" class="mini-btn" id="pfExport" title="Unduh posisi dan nilainya sebagai CSV">CSV</button>
         <label class="mini-btn pf-import">Impor CSV<input type="file" id="pfImport" accept=".csv,text/csv" class="sr"></label>
       </div>
       <div class="pf-in">
         <form class="pf-form" id="pfForm" aria-label="Tambah atau ubah posisi">
-          <label>Kode <input id="pfSym" list="pfSymList" maxlength="20" autocomplete="off" spellcheck="false" required placeholder="AAPL, BTC, EURUSD"></label>
+          <label>Kode <input id="pfSym" class="mini-input" list="pfSymList" maxlength="20" autocomplete="off" spellcheck="false" required placeholder="AAPL, BTC, EURUSD"></label>
           <datalist id="pfSymList"></datalist>
-          <label>Jumlah <input id="pfQty" inputmode="decimal" required placeholder="10"></label>
-          <label>Harga rata-rata <input id="pfAvg" inputmode="decimal" placeholder="opsional"></label>
-          <label>Mata uang harga rata-rata <select id="pfCur"><option value="">sama dengan harga aset</option><option>USD</option><option>IDR</option><option>EUR</option><option>USDT</option><option>JPY</option><option>GBP</option><option>SGD</option></select></label>
+          <label>Jumlah <input id="pfQty" class="mini-input" inputmode="decimal" required placeholder="10"></label>
+          <label>Harga rata-rata <input id="pfAvg" class="mini-input" inputmode="decimal" placeholder="opsional"></label>
+          <label>Mata uang harga rata-rata <span class="sel-wrap"><select id="pfCur"><option value="">sama dengan harga aset</option><option>USD</option><option>IDR</option><option>EUR</option><option>USDT</option><option>JPY</option><option>GBP</option><option>SGD</option></select></span></label>
           <button type="submit" class="mini-btn">Simpan posisi</button>
           <span class="meta" id="pfMsg" role="status"></span>
         </form>

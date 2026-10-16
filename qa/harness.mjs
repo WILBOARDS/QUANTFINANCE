@@ -9,7 +9,7 @@
    - offline : semua permintaan ke luar ditolak
    - server  : server lokal + sumber palsu; browser DILARANG ke internet langsung */
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchBrowser } from './browser.mjs';
@@ -34,6 +34,8 @@ async function freePort() {
 }
 
 export async function createHarness() {
+  /* cache disk server dikosongkan tiap kali tes dijalankan: tes tidak boleh lolos karena data palsu lama */
+  rmSync(OUT + 'cache', { recursive: true, force: true });
   const { browser, info } = await launchBrowser();
   const results = [];
   let fails = 0, srv = null, srvBase = null, srvLog = '';

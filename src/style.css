@@ -264,7 +264,7 @@
   .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 1.8fr); border-block-start: 1px solid var(--line-soft); }
   .stats > div { padding: 7px 12px; border-inline-end: 1px solid var(--line-soft); min-inline-size: 0; }
   .stats > div:last-child { border-inline-end: 0; }
-  .stats dt { color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+  .stats dt { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stats dd { font-family: var(--font-num); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @media (max-width: 760px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
@@ -486,7 +486,7 @@
   .regime-card { grid-area: regime; } .curve-card { grid-area: curve; } .macro-card { grid-area: macro; }
   .cmdty-card { grid-area: cmdty; } .cb-card { grid-area: cb; } .corr-card { grid-area: corr; } .stress-card { grid-area: stress; }
   .macro-grid > .card { max-block-size: 560px; }
-  #page-macro, #page-sources, #page-about { block-size: 100%; overflow-y: auto; }
+  #page-macro, #page-sources, #page-about, #page-screener, #page-rates, #page-fx, #page-cmdty, #page-heatmap, #page-people, #page-portfolio { block-size: 100%; overflow-y: auto; }
   .sources { display: grid; gap: 10px; align-content: start; }
 
   @media (max-width: 1180px) {
@@ -503,7 +503,7 @@
     .clist-card { block-size: 560px; }
     .news-main { block-size: 640px; }
     .choke-card, .vessel-card { block-size: 460px; }
-    #page-macro, #page-sources, #page-about { block-size: auto; overflow: visible; }
+    #page-macro, #page-sources, #page-about, #page-screener, #page-rates, #page-fx, #page-cmdty, #page-heatmap, #page-people, #page-portfolio { block-size: auto; overflow: visible; }
   }
   @media (min-width: 1181px) and (max-height: 820px) {
     .intel-grid { height: auto; grid-template-rows: 560px 250px; }
@@ -700,6 +700,8 @@
   .c-sec { display: grid; gap: 8px; align-content: start; }
   .c-sec > h3 { font-size: 12px; color: var(--brass); font-weight: 600; display: flex; gap: 8px; align-items: center; }
   .svgchart svg { inline-size: 100%; block-size: auto; display: block; }
+  /* grafik singkat di Ringkasan: tinggi tetap supaya tidak memanjang di layar lebar */
+  .svgchart.ov-chart svg { block-size: 140px; }
   .svgchart text { font-family: var(--font-num); font-size: 10px; fill: var(--ink-3); }
   .svgchart .lg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--ink-2); margin-block-start: 4px; }
   .svgchart .lg i { display: inline-block; inline-size: 12px; block-size: 2px; margin-inline-end: 5px; vertical-align: 3px; }

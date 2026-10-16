@@ -179,7 +179,7 @@ SecurityTabs.register({
     const Wd = 620, Ht = 120, ys = pts.map(p => p.close), lo = Math.min(...ys), hi = Math.max(...ys);
     const X = i => 4 + (Wd - 8) * i / (pts.length - 1), Y = v => 6 + (Ht - 12) * (1 - (v - lo) / Math.max(1e-12, hi - lo));
     const chg = ys[ys.length - 1] / ys[0] - 1;
-    box.innerHTML = `<div class="svgchart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Harga 1 tahun"><path d="${pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.close).toFixed(1)).join(' ')}" fill="none" stroke="${chg >= 0 ? '#34d1a4' : '#ff6f61'}" stroke-width="1.5"/></svg>
+    box.innerHTML = `<div class="svgchart ov-chart"><svg viewBox="0 0 ${Wd} ${Ht}" preserveAspectRatio="none" role="img" aria-label="Harga 1 tahun"><path vector-effect="non-scaling-stroke" d="${pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.close).toFixed(1)).join(' ')}" fill="none" stroke="${chg >= 0 ? '#34d1a4' : '#ff6f61'}" stroke-width="1.5"/></svg>
       <div class="lg"><span>${esc(new Date(pts[0].time * 1000).toISOString().slice(0, 10))} → ${esc(new Date(pts[pts.length - 1].time * 1000).toISOString().slice(0, 10))}</span><span class="${sign(chg)}">${fmtPct(chg, 1)} ${qBadge('calculated', 'perubahan dari bar pertama ke terakhir')}</span><span>rendah ${fmt(lo, 2)} · tinggi ${fmt(hi, 2)}</span>${qBadge(h.quality, h.source)}<span class="meta">${esc(h.source || '')}</span></div></div>`;
   },
 });

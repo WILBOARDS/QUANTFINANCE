@@ -111,7 +111,8 @@ function gdacs() {
 function erapi() {
   const rates = { USD: 1 };
   for (const c of WC) for (const k of Object.keys(c.currencies || {})) rates[k] ??= +(1 + (hash(k) % 20000) / 3).toFixed(4);
-  rates.IDR = 16420; rates.EUR = 0.86; rates.JPY = 148.3;
+  /* mata uang utama: nilai kira-kira yang masuk akal (UJI, bukan kurs asli) supaya tabel/tes Valas tidak menampilkan angka acak */
+  Object.assign(rates, { IDR: 16420, EUR: 0.86, JPY: 148.3, GBP: 0.75, CNY: 7.12, AUD: 1.53, CAD: 1.38, CHF: 0.80, SGD: 1.29, KRW: 1390, INR: 88.4, MYR: 4.22 });
   return json({ result: 'success', time_last_update_unix: Math.floor(now / 1000) - 3600, base_code: 'USD', rates });
 }
 const BOXES = [[26.5, 56.3], [12.6, 43.4], [30.0, 32.4], [2.8, 101.5], [-6.0, 105.8], [-8.5, 115.7], [9.1, -79.7], [41.1, 29.0], [51.0, 1.4], [24.2, 119.5]];

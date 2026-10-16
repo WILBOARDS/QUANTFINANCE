@@ -39,7 +39,7 @@ const CryptoTabs = (() => {
         <div><dt>Transaksi ≥ ${esc(fmtCompact(thr))} ${esc(quote)}</dt><dd>${big.length}</dd><small>${qBadge('calculated')} nilai ${esc(fmtCompact(bigFlow.total))} ${esc(quote)}</small></div>
         <div><dt>Porsi taker beli (besar)</dt><dd>${big.length ? flowLin(bigFlow, 'Porsi taker beli transaksi besar ' + e.symbol) : '–'}</dd><small>${qBadge('calculated')} hanya transaksi besar</small></div>
       </div>
-      <form class="cx-thr" data-cx-thr><label for="cxThr">Ambang transaksi besar (${esc(quote)})</label><input id="cxThr" type="number" min="1000" step="1000" inputmode="numeric" value="${thr}"><button type="submit" class="mini-btn">Terapkan</button><button type="button" class="mini-btn" data-cx-thr-reset>Bawaan (${esc(fmtCompact(X.defaultThreshold(s)))})</button></form>
+      <form class="cx-thr" data-cx-thr><label for="cxThr">Ambang transaksi besar (${esc(quote)})</label><input id="cxThr" class="mini-input" type="number" min="1000" step="1000" inputmode="numeric" value="${thr}"><button type="submit" class="mini-btn">Terapkan</button><button type="button" class="mini-btn" data-cx-thr-reset>Bawaan (${esc(fmtCompact(X.defaultThreshold(s)))})</button></form>
       <h3 class="fa-h3">Transaksi besar terukur di Binance ${qBadge('calculated')}</h3>
       ${big.length ? `<div class="table-wrap"><table class="dense static cx-tbl"><caption class="sr">Transaksi besar ${esc(e.symbol)}</caption>${head}<tbody>${big.slice(0, 30).map(row).join('')}</tbody></table></div>` : `<p class="hint">Tidak ada transaksi ≥ ${esc(fmtCompact(thr))} ${esc(quote)} dalam ${t.length} transaksi terakhir.</p>`}
       <h3 class="fa-h3">Transaksi terbaru ${qBadge(q)}</h3>

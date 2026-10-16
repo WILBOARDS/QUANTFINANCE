@@ -173,7 +173,7 @@ const ChartView = (() => {
     $('#stats').innerHTML = [
       ['Buka', fmt(i.open, d)], ['Tertinggi', fmt(i.high, d)], ['Terendah', fmt(i.low, d)],
       [i.type === 'crypto' ? 'Harga 24 jam lalu' : 'Tutup sebelumnya', fmt(i.prev, d)], ['Volume', i.type === 'index' ? '–' : fmtCompact(i.volume)], ['Kisaran 52 minggu', r],
-    ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    ].map(([k, v]) => `<div><dt title="${k}">${k}</dt><dd>${v}</dd></div>`).join('');
   }
 
   function applyTick(inst) {
