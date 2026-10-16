@@ -240,9 +240,9 @@
           <button type="button" data-view="impact" aria-pressed="false" title="Skor dampak heuristik tertinggi dulu (Analisis otomatis)">Paling relevan</button>
         </div>
         <input id="newsQ" class="mini-input" type="search" placeholder="Saring hasil: judul, sumber, negara" autocomplete="off" aria-label="Saring hasil yang sudah dimuat">
-        <span class="sel-wrap"><select id="newsFTheme" aria-label="Saring tema (Analisis otomatis)"><option value="">Semua tema</option></select></span>
-        <span class="sel-wrap"><select id="newsFCountry" aria-label="Saring negara sumber"><option value="">Semua negara sumber</option></select></span>
-        <span class="sel-wrap"><select id="newsFDomain" aria-label="Saring domain sumber"><option value="">Semua domain</option></select></span>
+        <label class="sel-wrap"><span class="sr">Saring tema (Analisis otomatis)</span><select id="newsFTheme"><option value="">Semua tema</option></select></label>
+        <label class="sel-wrap"><span class="sr">Saring negara sumber</span><select id="newsFCountry"><option value="">Semua negara sumber</option></select></label>
+        <label class="sel-wrap"><span class="sr">Saring domain sumber</span><select id="newsFDomain"><option value="">Semua domain</option></select></label>
         <label class="chk"><input type="checkbox" id="newsFSpec"> Hanya spekulatif</label>
       </div>
       <div class="table-wrap" id="newsWrap"><table class="dense news-table" id="newsTable"></table></div>

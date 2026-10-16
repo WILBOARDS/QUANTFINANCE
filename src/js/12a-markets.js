@@ -24,11 +24,11 @@ const MarketList = (() => {
       const chgTxt = chg && chg.value !== null ? (cfg.bp ? (chg.value > 0 ? '+' : '') + fmt(chg.value, 0) + ' bp' : fmtPct(chg.value / 100, 2)) : null;
       const chgCell = chgTxt === null ? '<span class="na" title="Perubahan tidak tersedia">–</span>'
         : Lineage.wrap({ label: (cfg.bp ? 'Perubahan (basis poin) ' : 'Perubahan % ') + e.symbol, value: chgTxt, quality: 'calculated', source: p.source, asOf: p.asOf, fetchedAt: p.fetchedAt, formula: cfg.bp ? '(nilai terakhir − nilai pengamatan sebelumnya) × 100 basis poin' : '(harga terakhir ÷ penutupan/pengamatan sebelumnya − 1) × 100' }, `<span class="${sign(chg.value)}">${esc(chgTxt)}</span>`);
-      return `<tr data-id="${esc(e.id)}" aria-selected="${sel}"><th scope="row"><button type="button" class="link-btn" data-mk-pick>${esc(e.symbol)}</button><span class="sub">${esc(e.name)}${e.unit ? ' · ' + esc(e.unit) : ''}</span></th>
+      return `<tr data-id="${esc(e.id)}" aria-selected="${sel}"><th scope="row"><button type="button" class="link-btn" data-mk-pick>${esc(e.symbol)}</button><span class="sub">${esc(e.name)}${e.unit ? ' · ' + esc(e.unit) : ''}</span>${e.note ? `<span class="sub mk-qn">${esc(e.note)}</span>` : ''}</th>
         <td class="num">${p.value === null ? `<span class="na" title="${esc('Tidak tersedia: ' + (p.reason || q.reason || 'tanpa sumber'))}">Tidak tersedia</span>` : datumHtml(p, { dp: cfg.dp ? cfg.dp(e, p.value) : 2, label: e.symbol })}</td>
         <td class="num">${chgCell}</td>
         <td>${datumAge(p)}</td>
-        <td class="wrap mk-src">${esc(p.value === null ? (p.reason || q.reason || '') : p.source || '')}${q.note ? `<span class="sub mk-qn">${esc(q.note)}</span>` : ''}${e.note ? `<span class="sub">${esc(e.note)}</span>` : ''}</td>
+        <td class="wrap mk-src">${esc(p.value === null ? (p.reason || q.reason || '') : p.source || '')}${q.note ? `<span class="sub mk-qn">${esc(q.note)}</span>` : ''}</td>
         <td><button type="button" class="mini-btn" data-mk-open-row aria-label="Buka detail ${esc(e.symbol)}">Detail</button></td></tr>`;
     }
     function draw() {
@@ -38,6 +38,7 @@ const MarketList = (() => {
       /* catatan sumber yang berulang di 2+ baris: sembunyikan per baris, tulis sekali di bawah tabel */
       const cnt = new Map();
       for (const q of done) if (q && q.note) cnt.set(q.note, (cnt.get(q.note) || 0) + 1);
+      for (const e of ents()) if (e.note) cnt.set(e.note, (cnt.get(e.note) || 0) + 1);
       const shared = [...cnt].filter(([, n]) => n > 1);
       $p('Body').querySelectorAll('.mk-qn').forEach(x => { x.hidden = shared.some(([t]) => t === x.textContent); });
       $p('Common').innerHTML = shared.map(([t, n]) => `<li>${esc(t)} <span class="meta">(${n} baris)</span></li>`).join('');

@@ -3,7 +3,7 @@
    ===================================================================== */
 @layer pages {
   .ppl-in { padding: 8px 14px 12px; display: grid; gap: 8px; min-inline-size: 0; max-inline-size: 960px; }
-  .ppl-form { display: flex; gap: 6px; }
+  .ppl-form { display: flex; gap: 6px; padding: 0; }
   .ppl-form input { flex: 1; min-inline-size: 0; }
   .wd-hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12px; }
   .wd-head h2 { margin: 0; font-size: 16px; color: var(--ink); }

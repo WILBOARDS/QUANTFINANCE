@@ -5,6 +5,8 @@
   /* ---------- terminal berita ---------- */
   .news-gq, .news-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 14px 0; }
   .news-gq input { flex: 1 1 220px; min-inline-size: 0; }
+  /* tombol di samping kotak cari utama setinggi kotaknya (34px, .search input) */
+  .news-gq .mini-btn, .ppl-form .mini-btn { min-block-size: 34px; }
   .news-ctl { padding-block-end: 6px; }
   .news-ctl input[type="search"] { flex: 1 1 160px; inline-size: auto; min-inline-size: 0; }
   /* pilihan saringan sama lebar dan mengisi baris di HP */
