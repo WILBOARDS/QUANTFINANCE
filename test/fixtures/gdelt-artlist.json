@@ -1,0 +1,7 @@
+{"articles":[
+ {"url":"https://example-news.test/a1","url_mobile":"","title":"Bank Indonesia expected to cut rates as rupiah stabilises","seendate":"20261005T081500Z","socialimage":"","domain":"example-news.test","language":"English","sourcecountry":"Indonesia"},
+ {"url":"https://example-news.test/a2","url_mobile":"","title":"Oil prices surge after tanker attack in Strait of Hormuz","seendate":"20261005T074500Z","socialimage":"","domain":"example-wire.test","language":"English","sourcecountry":"United States"},
+ {"url":"https://example-news.test/a2b","url_mobile":"","title":"Oil prices surge after tanker attack in Strait of Hormuz","seendate":"20261005T074600Z","socialimage":"","domain":"syndicate.test","language":"English","sourcecountry":"United Kingdom"},
+ {"url":"https://example-news.test/a3","url_mobile":"","title":"Election protests spread in capital","seendate":"20261004T221000Z","socialimage":"","domain":"example-daily.test","language":"English","sourcecountry":"Kenya"},
+ {"url":"","title":"Missing url is skipped","seendate":"20261004T221000Z"}
+]}

@@ -1,0 +1,36 @@
+{
+  "cik": "7654321",
+  "entityType": "operating",
+  "sic": "6021",
+  "sicDescription": "National Commercial Banks",
+  "insiderTransactionForOwnerExists": 0,
+  "insiderTransactionForIssuerExists": 1,
+  "name": "[UJI] Contoh Bank Corp",
+  "tickers": ["UJIB", "UJIB-P"],
+  "exchanges": ["NYSE", "NYSE"],
+  "ein": "000000000",
+  "description": "",
+  "website": "",
+  "category": "Large accelerated filer",
+  "fiscalYearEnd": "1231",
+  "stateOfIncorporation": "DE",
+  "filings": {
+    "recent": {
+      "accessionNumber": ["0001999999-25-000101", "0007654321-25-000050", "0007654321-25-000044", "0001888888-25-000003", "0007654321-25-000010", "0007654321-24-000099"],
+      "filingDate": ["2025-03-10", "2025-03-01", "2025-02-25", "2025-02-14", "2025-02-20", "2024-11-01"],
+      "reportDate": ["2025-03-06", "2025-02-28", "", "", "2024-12-31", "2024-09-30"],
+      "acceptanceDateTime": ["2025-03-10T16:01:02.000Z", "2025-03-01T08:00:00.000Z", "2025-02-25T08:00:00.000Z", "2025-02-14T08:00:00.000Z", "2025-02-20T08:00:00.000Z", "2024-11-01T08:00:00.000Z"],
+      "act": ["", "34", "34", "34", "34", "34"],
+      "form": ["4", "8-K", "DEF 14A", "SCHEDULE 13G", "10-K", "10-Q"],
+      "fileNumber": ["", "001-00001", "001-00001", "005-00001", "001-00001", "001-00001"],
+      "filmNumber": ["", "25000001", "25000002", "25000003", "25000004", "24000001"],
+      "items": ["", "2.02,9.01", "", "", "", ""],
+      "size": [5000, 120000, 900000, 20000, 9000000, 4000000],
+      "isXBRL": [0, 1, 0, 0, 1, 1],
+      "isInlineXBRL": [0, 1, 0, 0, 1, 1],
+      "primaryDocument": ["xslF345X05/wk-form4_1741640000.xml", "ujib-20250228.htm", "ujib-proxy.htm", "../../evil.htm", "ujib-20241231.htm", "ujib-20240930.htm"],
+      "primaryDocDescription": ["FORM 4", "8-K", "DEF 14A", "SCHEDULE 13G", "10-K", "10-Q"]
+    },
+    "files": [{"name": "CIK0007654321-submissions-001.json", "filingCount": 1500, "filingFrom": "1994-01-01", "filingTo": "2015-12-31"}]
+  }
+}

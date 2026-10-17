@@ -1,0 +1,32 @@
+{
+  "name": "quantterminal",
+  "version": "2.1.0",
+  "private": true,
+  "description": "QuantTerminal: terminal intelijen pasar global (peta 3D, negara, berita, kapal) dengan data gratis yang jujur.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server/server.mjs",
+    "dev": "node build.mjs && node server/server.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "e2e": "node build.mjs && node qa/e2e.mjs",
+    "e2e:install": "playwright-core install chromium",
+    "doctor": "node scripts/doctor.mjs",
+    "secrets": "node scripts/check-secrets.mjs",
+    "check": "node build.mjs && node --test \"test/*.test.mjs\" && node scripts/check-secrets.mjs",
+    "a11y": "node build.mjs && node qa/e2e.mjs X"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "d3-array": "3.2.4",
+    "d3-geo": "3.1.1",
+    "i18n-iso-countries": "7.14.0",
+    "lightweight-charts": "4.2.3",
+    "playwright-core": "1.56.1",
+    "world-atlas": "2.0.2",
+    "world-countries": "5.1.0"
+  }
+}
