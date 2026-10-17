@@ -76,10 +76,10 @@ const HeatmapPage = (() => {
     const total = d.tiles.reduce((s, t) => s + t.value, 0);
     map.innerHTML = tiles.length ? `<svg class="hm-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="group" aria-label="Heatmap ${esc(REGIONS[S.region])}: ${tiles.length} aset, ukuran kapitalisasi pasar, warna perubahan persen">
       ${tiles.map((t, k) => {
-        const big = t.w > 54 && t.h > 30, chgTxt = Number.isFinite(t.chg) ? (t.chg >= 0 ? '+' : '') + fmt(t.chg, 2) + '%' : 'n/a';
+        const fs = Math.round(Math.max(12, Math.min(22, t.w / 7, t.h / 4))), big = t.w > 54 && t.h > 30, chgTxt = Number.isFinite(t.chg) ? (t.chg >= 0 ? '+' : '') + fmt(t.chg, 2) + '%' : 'n/a';
         /* nama aksesibel diawali teks yang terlihat di kotak (kode + perubahan), lalu rinciannya */
         const label = `${t.sym} ${chgTxt}: ${t.name}, kapitalisasi ${fmtCompact(t.value)} USD (${fmt(t.value / total * 100, 1)}% dari peta)`;
-        return `<g class="hm-t" data-k="${k}" tabindex="0" role="button" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${t.x.toFixed(1)}" y="${t.y.toFixed(1)}" width="${Math.max(0, t.w - 1).toFixed(1)}" height="${Math.max(0, t.h - 1).toFixed(1)}" fill="${X.changeColor(t.chg)}"/>${big ? `<text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 - 2).toFixed(1)}" text-anchor="middle" class="hm-s">${esc(t.sym)}</text><text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 + 12).toFixed(1)}" text-anchor="middle" class="hm-c">${esc(chgTxt)}</text>` : ''}</g>`;
+        return `<g class="hm-t" data-k="${k}" tabindex="0" role="button" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${t.x.toFixed(1)}" y="${t.y.toFixed(1)}" width="${Math.max(0, t.w - 1).toFixed(1)}" height="${Math.max(0, t.h - 1).toFixed(1)}" fill="${X.changeColor(t.chg)}"/>${big ? `<text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 - fs * 0.15).toFixed(1)}" text-anchor="middle" class="hm-s" style="font-size:${fs}px">${esc(t.sym)}</text><text x="${(t.x + t.w / 2).toFixed(1)}" y="${(t.y + t.h / 2 + fs * 0.95).toFixed(1)}" text-anchor="middle" class="hm-c" style="font-size:${Math.round(fs * 0.85)}px">${esc(chgTxt)}</text>` : ''}</g>`;
       }).join('')}</svg>` : `<p class="empty">Tidak ada aset dengan kapitalisasi pasar nyata untuk wilayah ini.</p>`;
     S.tiles = tiles;
     const steps = [-5, -3, -1, 0, 1, 3, 5];

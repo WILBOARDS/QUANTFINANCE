@@ -42,7 +42,7 @@ const SecurityPage = (() => {
     pq.innerHTML = p.value === null
       ? `<div class="sq-main"><span class="na big">Tidak tersedia</span>${qBadge('unavailable')}</div><p class="hint">${esc(q.reason || p.reason || '')}</p>`
       : `<div class="sq-main"><span class="sq-price num">${datumHtml(p, { dp, label: (e.symbol || e.name) + ' harga' })}</span><span class="meta">${esc(unit)}</span>
-          ${q.changePct && q.changePct.value !== null ? `<span class="pill ${sign(q.changePct.value)}">${datumHtml(q.changePct, { dp: 2, label: 'Perubahan %' })}%</span>` : ''}
+          ${q.changePct && q.changePct.value !== null ? `<span class="pill ${sign(q.changePct.value)}">${datumHtml(q.changePct, { pct: true, dp: 2, label: 'Perubahan %' })}</span>` : ''}
           ${q.changeBp && q.changeBp.value !== null ? `<span class="pill ${sign(q.changeBp.value)}">${datumHtml(q.changeBp, { dp: 0, label: 'Perubahan bp' })} bp</span>` : ''}
           ${datumAge(p)}</div>
         <dl class="sq-meta">${[['Sumber', esc(p.source || '–')], ['Waktu data', esc(p.asOf ? fmtTime(p.asOf) : '–')], ['Diambil', esc(p.fetchedAt ? fmtTime(p.fetchedAt) + ' (' + fmtAge(p.fetchedAt) + ')' : '–')], ['Kualitas', esc((QUALITY[p.quality] || [p.quality])[0]) + (p.stale ? ' (basi)' : '')],
@@ -96,7 +96,7 @@ const SecurityPage = (() => {
       <div class="side-body"><div id="cmpTable"><p class="loading">Mengambil harga</p></div><h3>Kinerja dinormalisasi (awal periode = 100) ${qBadge('calculated', 'Dihitung dari riwayat masing-masing sumber')}</h3><div id="cmpChart"><p class="loading">Mengambil riwayat</p></div></div>`;
     const quotes = await Promise.all(list.map(e => Quotes.get(e)));
     if (my !== S.seq) return;
-    $('#cmpTable').innerHTML = `<table class="dense"><thead><tr><th>Kode</th><th>Nama</th><th class="num">Harga</th><th class="num">Perubahan</th><th>Kualitas · umur</th><th>Sumber</th></tr></thead><tbody>${list.map((e, k) => { const q = quotes[k]; return `<tr><td><button type="button" class="link-btn" data-open="${esc(e.id)}">${esc(e.symbol)}</button></td><td>${esc(e.name)}</td><td class="num">${datumHtml(q.price, { dp: priceDp(e, q.price.value) })}</td><td class="num">${q.changePct && q.changePct.value !== null ? `<span class="${sign(q.changePct.value)}">${datumHtml(q.changePct, { dp: 2 })}%</span>` : '<span class="na">–</span>'}</td><td>${datumAge(q.price)}</td><td class="src">${esc(q.price.source || q.reason || '')}</td></tr>`; }).join('')}</tbody></table>`;
+    $('#cmpTable').innerHTML = `<table class="dense"><thead><tr><th>Kode</th><th>Nama</th><th class="num">Harga</th><th class="num">Perubahan</th><th>Kualitas · umur</th><th>Sumber</th></tr></thead><tbody>${list.map((e, k) => { const q = quotes[k]; return `<tr><td><button type="button" class="link-btn" data-open="${esc(e.id)}">${esc(e.symbol)}</button></td><td>${esc(e.name)}</td><td class="num">${datumHtml(q.price, { dp: priceDp(e, q.price.value) })}</td><td class="num">${q.changePct && q.changePct.value !== null ? `<span class="${sign(q.changePct.value)}">${datumHtml(q.changePct, { pct: true, dp: 2 })}</span>` : '<span class="na">–</span>'}</td><td>${datumAge(q.price)}</td><td class="src">${esc(q.price.source || q.reason || '')}</td></tr>`; }).join('')}</tbody></table>`;
     const hs = await Promise.all(list.map(e => Quotes.history(e, tf)));
     if (my !== S.seq) return;
     const series = list.map((e, k) => ({ e, h: hs[k], pts: (hs[k].bars || []).filter(b => Number.isFinite(b.close) && b.close > 0) }));

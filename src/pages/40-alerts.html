@@ -8,10 +8,10 @@
         <button type="button" class="mini-btn" id="alNotifBtn">Izinkan notifikasi browser</button>
       </div>
       <form class="al-form" id="alForm">
-        <label>Aset <input id="alSym" required placeholder="AAPL" autocomplete="off" spellcheck="false"></label>
-        <label>Ukuran <select id="alField"><option value="price">Harga</option><option value="chg">Perubahan % harian</option><option value="volume">Volume</option></select></label>
-        <label>Operator <select id="alOp"><option value="&gt;">&gt;</option><option value="&lt;">&lt;</option><option value="&gt;=">&gt;=</option><option value="&lt;=">&lt;=</option></select></label>
-        <label>Nilai <input id="alVal" required placeholder="300, -5, atau AVG*2" autocomplete="off"></label>
+        <label>Aset <input id="alSym" class="mini-input" required placeholder="AAPL" autocomplete="off" spellcheck="false"></label>
+        <label class="sel-wrap">Ukuran <select id="alField"><option value="price">Harga</option><option value="chg">Perubahan % harian</option><option value="volume">Volume</option></select></label>
+        <label class="sel-wrap">Operator <select id="alOp"><option value="&gt;">&gt;</option><option value="&lt;">&lt;</option><option value="&gt;=">&gt;=</option><option value="&lt;=">&lt;=</option></select></label>
+        <label>Nilai <input id="alVal" class="mini-input" required placeholder="300, -5, atau AVG*2" autocomplete="off"></label>
         <button type="submit" class="btn">Buat alert</button>
         <span class="meta" id="alMsg" role="status"></span>
       </form>

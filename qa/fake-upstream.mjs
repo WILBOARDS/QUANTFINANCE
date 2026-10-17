@@ -175,9 +175,11 @@ function coingecko(url) {
   if (url.pathname.includes('/ohlc')) { const r = rng(url.pathname); let c = 90000; return json(Array.from({ length: 120 }, (_, i) => { const o = c; c *= 1 + (r() - 0.48) * 0.03; return [now - (119 - i) * 4 * 3600e3, o, Math.max(o, c) * 1.01, Math.min(o, c) * 0.99, c]; })); }
   return json([['bitcoin', 'btc', 97100], ['ethereum', 'eth', 3590], ['solana', 'sol', 194], ['binancecoin', 'bnb', 719], ['tether', 'usdt', 1.0003]].map(([id, s, p], i) => ({ id, symbol: s, name: id, current_price: p, price_change_percentage_24h: 1.1 - i, market_cap: p * 1e7, fully_diluted_valuation: p * 1.1e7, total_volume: p * 1e5, high_24h: p * 1.01, low_24h: p * 0.98, market_cap_rank: i + 1, last_updated: new Date(now).toISOString() })));
 }
+/* harga dasar palsu bersama Finnhub & Yahoo supaya kuotasi dan riwayat saham yang sama tidak bertentangan (UJI) */
+const FH_BASE = { AAPL: 235, MSFT: 510, NVDA: 185, AMZN: 225, GOOGL: 250, META: 720, TSLA: 430, JPM: 300, VALE: 10.5 };
 function finnhub(url) {
   const p = url.pathname, sym = url.searchParams.get('symbol') || 'AAPL';
-  const base = { AAPL: 235, MSFT: 510, NVDA: 185, AMZN: 225, GOOGL: 250, META: 720, TSLA: 430, JPM: 300, VALE: 10.5 }[sym] || 50;
+  const base = FH_BASE[sym] || 50;
   if (p.endsWith('/quote')) return json({ c: base * 1.004, d: base * 0.004, dp: 0.4, h: base * 1.01, l: base * 0.99, o: base, pc: base, t: Math.floor(now / 1000) });
   if (p.endsWith('/stock/metric')) return json({ metric: { peTTM: 31.2, pbQuarterly: 45.1, psTTM: 8.4, epsTTM: 7.1, roeTTM: 150.2, roaTTM: 28.4, grossMarginTTM: 46.2, operatingMarginTTM: 31.5, netProfitMarginTTM: 24.3, 'totalDebt/totalEquityQuarterly': 1.5, currentRatioQuarterly: 0.87, revenueGrowthTTMYoy: 5.9, epsGrowthTTMYoy: 9.2, beta: 1.2, dividendYieldIndicatedAnnual: 0.44, marketCapitalization: 3500000, '52WeekHigh': 260, '52WeekLow': 170, freeCashFlowPerShareTTM: 6.9 }, series: {} });
   if (p.endsWith('/profile2')) return json({ name: `[UJI] ${sym} Inc`, country: 'US', currency: 'USD', exchange: 'NASDAQ', finnhubIndustry: 'Technology', ipo: '1980-12-12', marketCapitalization: 3500000, shareOutstanding: 15000, weburl: 'https://example.test', ticker: sym });
@@ -190,7 +192,7 @@ function finnhub(url) {
 }
 function yahoo(url) {
   const sym = decodeURIComponent(url.pathname.split('/').pop());
-  const r = rng(sym), base = 100 + (hash(sym) % 9000);
+  const r = rng(sym), base = FH_BASE[sym] || 100 + (hash(sym) % 9000);
   const iv = url.searchParams.get('interval'), range = url.searchParams.get('range');
   const step = iv === '5m' ? 300 : iv === '1wk' ? 604800 : 86400, n = range === '1d' ? 78 : range === '5y' ? 260 : 250;
   let c = base; const ts = [], o = [], h = [], l = [], cl = [], v = [];

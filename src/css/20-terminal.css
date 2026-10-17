@@ -140,7 +140,6 @@
   .wl-card .tabs, .al-card .tabs { border-block-end: 1px solid var(--line-soft); }
   .wl-actions { display: flex; flex-wrap: wrap; gap: 4px; }
   .wl-form, .wl-add, .al-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 14px; border-block-end: 1px solid var(--line-soft); }
-  .wl-form input, .wl-add input, .al-form input, .al-form select { min-block-size: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--abyss); color: var(--ink); }
   .wl-add input { inline-size: min(320px, 100%); }
   .al-form label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12px; }
   .al-form input { inline-size: 110px; }
